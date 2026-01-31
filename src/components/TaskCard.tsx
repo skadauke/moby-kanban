@@ -46,12 +46,20 @@ export function TaskCard({ task, onEdit, onDelete, onToggleFlag }: TaskCardProps
     }
   };
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Don't open modal if clicking on dropdown or dragging
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-dropdown]') || target.closest('button')) return;
+    onEdit(task);
+  };
+
   return (
     <Card
       ref={setNodeRef}
       style={style}
       {...attributes}
       {...listeners}
+      onClick={handleCardClick}
       className={`cursor-grab active:cursor-grabbing bg-zinc-900 border-zinc-800 hover:border-zinc-700 transition-all hover:scale-[1.02] ${
         task.needsReview ? "ring-2 ring-amber-500/50" : ""
       }`}
