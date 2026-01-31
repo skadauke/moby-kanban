@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Task, Priority, Creator, PRIORITIES, CREATORS } from "@/lib/types";
-import { createTask, updateTask } from "@/lib/actions";
+import { createTaskLocal } from "@/lib/store";
 import { Label } from "@/components/ui/label";
 
 interface TaskModalProps {
@@ -41,7 +41,6 @@ export function TaskModal({
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<Priority>("MEDIUM");
   const [creator, setCreator] = useState<Creator>("MOBY");
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isEditing = !!task;
 
@@ -59,33 +58,30 @@ export function TaskModal({
     }
   }, [task, open]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
 
-    setIsSubmitting(true);
-    try {
-      if (isEditing && task) {
-        const updated = await updateTask(task.id, {
-          title,
-          description: description || null,
-          priority,
-          creator,
-        });
-        onTaskUpdated(updated);
-      } else {
-        const created = await createTask({
-          title,
-          description: description || undefined,
-          priority,
-          creator,
-        });
-        onTaskCreated(created);
-      }
-      onClose();
-    } finally {
-      setIsSubmitting(false);
+    if (isEditing && task) {
+      const updated: Task = {
+        ...task,
+        title,
+        description: description || null,
+        priority,
+        creator,
+        updatedAt: new Date(),
+      };
+      onTaskUpdated(updated);
+    } else {
+      const created = createTaskLocal({
+        title,
+        description: description || undefined,
+        priority,
+        creator,
+      });
+      onTaskCreated(created);
     }
+    onClose();
   };
 
   return (
@@ -172,10 +168,10 @@ export function TaskModal({
             </Button>
             <Button
               type="submit"
-              disabled={!title.trim() || isSubmitting}
+              disabled={!title.trim()}
               className="bg-blue-600 hover:bg-blue-700"
             >
-              {isSubmitting ? "Saving..." : isEditing ? "Update" : "Create"}
+              {isEditing ? "Update" : "Create"}
             </Button>
           </DialogFooter>
         </form>

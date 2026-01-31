@@ -12,15 +12,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Task, PRIORITIES, CREATORS } from "@/lib/types";
-import { toggleReviewFlag, deleteTask } from "@/lib/actions";
 import { MoreHorizontal, Flag, Trash2, Pencil } from "lucide-react";
 
 interface TaskCardProps {
   task: Task;
   onEdit: (task: Task) => void;
+  onDelete: (taskId: string) => void;
+  onToggleFlag: (taskId: string) => void;
 }
 
-export function TaskCard({ task, onEdit }: TaskCardProps) {
+export function TaskCard({ task, onEdit, onDelete, onToggleFlag }: TaskCardProps) {
   const {
     attributes,
     listeners,
@@ -39,13 +40,9 @@ export function TaskCard({ task, onEdit }: TaskCardProps) {
   const priority = PRIORITIES.find((p) => p.value === task.priority);
   const creator = CREATORS.find((c) => c.value === task.creator);
 
-  const handleToggleFlag = async () => {
-    await toggleReviewFlag(task.id);
-  };
-
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (confirm("Delete this task?")) {
-      await deleteTask(task.id);
+      onDelete(task.id);
     }
   };
 
@@ -77,12 +74,12 @@ export function TaskCard({ task, onEdit }: TaskCardProps) {
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800">
             <DropdownMenuItem onClick={() => onEdit(task)}>
               <Pencil className="mr-2 h-4 w-4" />
               Edit
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleToggleFlag}>
+            <DropdownMenuItem onClick={() => onToggleFlag(task.id)}>
               <Flag className="mr-2 h-4 w-4" />
               {task.needsReview ? "Clear Flag" : "Flag for Review"}
             </DropdownMenuItem>

@@ -13,9 +13,11 @@ interface ColumnProps {
   title: string;
   tasks: Task[];
   onEditTask: (task: Task) => void;
+  onDeleteTask: (taskId: string) => void;
+  onToggleFlag: (taskId: string) => void;
 }
 
-export function Column({ id, title, tasks, onEditTask }: ColumnProps) {
+export function Column({ id, title, tasks, onEditTask, onDeleteTask, onToggleFlag }: ColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id });
 
   const columnColors: Record<Status, string> = {
@@ -47,7 +49,13 @@ export function Column({ id, title, tasks, onEditTask }: ColumnProps) {
           strategy={verticalListSortingStrategy}
         >
           {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} onEdit={onEditTask} />
+            <TaskCard 
+              key={task.id} 
+              task={task} 
+              onEdit={onEditTask}
+              onDelete={onDeleteTask}
+              onToggleFlag={onToggleFlag}
+            />
           ))}
         </SortableContext>
         {tasks.length === 0 && (

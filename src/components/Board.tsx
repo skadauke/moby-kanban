@@ -12,22 +12,26 @@ import {
   useSensors,
   closestCorners,
 } from "@dnd-kit/core";
-import { arrayMove } from "@dnd-kit/sortable";
 import { Task, Status, COLUMNS } from "@/lib/types";
 import { Column } from "./Column";
 import { TaskCard } from "./TaskCard";
 import { TaskModal } from "./TaskModal";
-import { moveTask } from "@/lib/actions";
 
 interface BoardProps {
   initialTasks: Task[];
+  onTasksChange?: (tasks: Task[]) => void;
 }
 
-export function Board({ initialTasks }: BoardProps) {
+export function Board({ initialTasks, onTasksChange }: BoardProps) {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const updateTasks = useCallback((newTasks: Task[]) => {
+    setTasks(newTasks);
+    onTasksChange?.(newTasks);
+  }, [onTasksChange]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -62,12 +66,11 @@ export function Board({ initialTasks }: BoardProps) {
     // Check if dragging over a column
     const overColumn = COLUMNS.find((c) => c.id === overId);
     if (overColumn) {
-      // Moving to empty column or column header
       if (activeTask.status !== overColumn.id) {
-        setTasks((prev) =>
-          prev.map((t) =>
+        updateTasks(
+          tasks.map((t) =>
             t.id === activeId
-              ? { ...t, status: overColumn.id, position: 0 }
+              ? { ...t, status: overColumn.id, position: 0, updatedAt: new Date() }
               : t
           )
         );
@@ -80,19 +83,17 @@ export function Board({ initialTasks }: BoardProps) {
     if (!overTask) return;
 
     if (activeTask.status !== overTask.status) {
-      // Moving to different column
-      setTasks((prev) => {
-        const updated = prev.map((t) =>
+      updateTasks(
+        tasks.map((t) =>
           t.id === activeId
-            ? { ...t, status: overTask.status, position: overTask.position }
+            ? { ...t, status: overTask.status, position: overTask.position, updatedAt: new Date() }
             : t
-        );
-        return updated;
-      });
+        )
+      );
     }
   };
 
-  const handleDragEnd = async (event: DragEndEvent) => {
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveTask(null);
 
@@ -106,7 +107,6 @@ export function Board({ initialTasks }: BoardProps) {
     const activeTask = tasks.find((t) => t.id === activeId);
     if (!activeTask) return;
 
-    // Determine target status and position
     let targetStatus: Status = activeTask.status;
     let targetPosition = 0;
 
@@ -125,20 +125,13 @@ export function Board({ initialTasks }: BoardProps) {
       }
     }
 
-    // Update local state immediately for optimistic UI
-    setTasks((prev) => {
-      const oldIndex = prev.findIndex((t) => t.id === activeId);
-      const newTasks = [...prev];
-      newTasks[oldIndex] = {
-        ...newTasks[oldIndex],
-        status: targetStatus,
-        position: targetPosition,
-      };
-      return newTasks;
-    });
-
-    // Persist to database
-    await moveTask(activeId, targetStatus, targetPosition);
+    updateTasks(
+      tasks.map((t) =>
+        t.id === activeId
+          ? { ...t, status: targetStatus, position: targetPosition, updatedAt: new Date() }
+          : t
+      )
+    );
   };
 
   const handleEditTask = (task: Task) => {
@@ -152,13 +145,25 @@ export function Board({ initialTasks }: BoardProps) {
   };
 
   const handleTaskUpdated = (updatedTask: Task) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === updatedTask.id ? updatedTask : t))
-    );
+    updateTasks(tasks.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
   };
 
   const handleTaskCreated = (newTask: Task) => {
-    setTasks((prev) => [...prev, newTask]);
+    updateTasks([...tasks, newTask]);
+  };
+
+  const handleDeleteTask = (taskId: string) => {
+    updateTasks(tasks.filter((t) => t.id !== taskId));
+  };
+
+  const handleToggleFlag = (taskId: string) => {
+    updateTasks(
+      tasks.map((t) =>
+        t.id === taskId
+          ? { ...t, needsReview: !t.needsReview, updatedAt: new Date() }
+          : t
+      )
+    );
   };
 
   return (
@@ -178,12 +183,19 @@ export function Board({ initialTasks }: BoardProps) {
               title={column.title}
               tasks={getTasksByStatus(column.id)}
               onEditTask={handleEditTask}
+              onDeleteTask={handleDeleteTask}
+              onToggleFlag={handleToggleFlag}
             />
           ))}
         </div>
         <DragOverlay>
           {activeTask && (
-            <TaskCard task={activeTask} onEdit={() => {}} />
+            <TaskCard 
+              task={activeTask} 
+              onEdit={() => {}} 
+              onDelete={() => {}}
+              onToggleFlag={() => {}}
+            />
           )}
         </DragOverlay>
       </DndContext>
