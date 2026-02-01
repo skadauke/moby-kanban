@@ -20,144 +20,162 @@ A beautiful, modern Kanban board web application for tracking projects built by 
 - I can add new tasks to the backlog
 - I can drag tasks between columns
 - I can flag tasks that need my review
-- I can add comments/notes to tasks
+- I can organize tasks into projects
 - I can see which tasks Moby created vs which I created
-- I can filter tasks by creator, priority, or tags
+- I can filter tasks by creator, priority, or project
 
 ### As Moby (AI)
-- I can add tasks programmatically via API
+- I can add tasks programmatically via API (using API key)
 - I can update task status as I complete work
 - I can flag tasks for Stephan's review
-- I can add progress notes to tasks
-- I can link tasks to GitHub PRs/commits
+- I can organize work into projects
 
 ---
 
 ## Features
 
-### MVP (Phase 1)
+### Implemented ✅
 
 #### Board View
-- [ ] Three default columns: **Backlog** → **In Progress** → **Done**
-- [ ] Drag and drop tasks between columns
-- [ ] Tasks show: title, description preview, creator avatar, priority badge
-- [ ] Click task to open detail modal
-- [ ] Smooth animations on all interactions
+- [x] Three default columns: **Backlog** → **In Progress** → **Done**
+- [x] Drag and drop tasks between columns
+- [x] Tasks show: title, description preview, creator avatar, priority badge
+- [x] Click task to open detail modal
+- [x] Smooth animations on all interactions
 
 #### Task Management
-- [ ] Create new task (title, description, priority)
-- [ ] Edit task details
-- [ ] Delete task (with confirmation)
-- [ ] Priority levels: Low, Medium, High, Urgent
-- [ ] Creator tracking (Moby 🐋 or Stephan 👤)
+- [x] Create new task (title, description, priority)
+- [x] Edit task details
+- [x] Delete task (with confirmation)
+- [x] Priority levels: Low, Medium, High, Urgent
+- [x] Creator tracking (Moby 🐋 or Stephan 👤)
+- [x] Position ordering within columns
 
 #### Review Flag System
-- [ ] Tasks can be flagged "Needs Review" 🚩
-- [ ] Flagged tasks have visual indicator
-- [ ] Filter to show only flagged tasks
-- [ ] One-click to clear flag after review
+- [x] Tasks can be flagged "Needs Review" 🚩
+- [x] Flagged tasks have visual indicator
+- [x] Filter to show only flagged tasks
+- [x] One-click to clear flag after review
 
-#### Persistence
-- [ ] SQLite database (local-first)
-- [ ] All changes saved immediately
-- [ ] Works offline, syncs when online
+#### Projects
+- [x] Create/edit/delete projects
+- [x] Assign tasks to projects
+- [x] Filter board by project
+- [x] Project sidebar with task counts
+- [x] Drag to reorder projects
 
-### Phase 2 (Future)
+#### Authentication & Access
+- [x] GitHub OAuth login (NextAuth)
+- [x] Allowlist of permitted GitHub users
+- [x] API key authentication for programmatic access (bots)
+- [x] Protected API routes
+
+### Future Ideas
 
 - [ ] Tags/labels with colors
 - [ ] Due dates with reminders
 - [ ] GitHub integration (link PRs, auto-update status)
 - [ ] Comments/activity feed on tasks
-- [ ] Multiple boards
 - [ ] Search across all tasks
 - [ ] Keyboard shortcuts
-- [ ] API for Moby to interact programmatically
 
 ---
 
 ## Technical Architecture
 
 ### Stack
-- **Framework**: Next.js 14+ (App Router)
+- **Framework**: Next.js 16 (App Router)
 - **Language**: TypeScript (strict mode)
 - **Styling**: Tailwind CSS + shadcn/ui components
-- **Database**: SQLite via Prisma
+- **Database**: Supabase (PostgreSQL)
+- **Auth**: NextAuth.js with GitHub OAuth
 - **Drag & Drop**: @dnd-kit/core
-- **State**: React hooks + Server Actions
+- **State**: React hooks + optimistic updates
 - **Deployment**: Vercel
 
 ### Project Structure
 ```
 moby-kanban/
-├── app/
-│   ├── layout.tsx          # Root layout with providers
-│   ├── page.tsx            # Main board view
-│   ├── api/
-│   │   └── tasks/          # REST API for programmatic access
-│   └── components/
-│       ├── Board.tsx       # Main board with columns
-│       ├── Column.tsx      # Single column container
-│       ├── TaskCard.tsx    # Draggable task card
-│       ├── TaskModal.tsx   # Task detail/edit modal
-│       ├── CreateTask.tsx  # New task form
-│       └── Header.tsx      # App header with filters
-├── lib/
-│   ├── db.ts              # Prisma client
-│   ├── actions.ts         # Server actions
-│   └── types.ts           # TypeScript types
-├── prisma/
-│   ├── schema.prisma      # Database schema
-│   └── seed.ts            # Sample data
-├── public/
-│   └── ...                # Static assets
+├── src/
+│   ├── app/
+│   │   ├── layout.tsx          # Root layout with providers
+│   │   ├── page.tsx            # Main board view
+│   │   ├── login/              # Login page
+│   │   └── api/
+│   │       ├── tasks/          # Task CRUD endpoints
+│   │       ├── projects/       # Project CRUD endpoints
+│   │       └── logs/           # Activity logging
+│   ├── components/
+│   │   ├── Board.tsx           # Main board with columns
+│   │   ├── Column.tsx          # Single column container
+│   │   ├── TaskCard.tsx        # Draggable task card
+│   │   ├── TaskModal.tsx       # Task detail/edit modal
+│   │   ├── CreateTaskModal.tsx # New task form
+│   │   ├── Header.tsx          # App header with filters
+│   │   └── ProjectSidebar.tsx  # Project list sidebar
+│   ├── lib/
+│   │   ├── supabase.ts         # Supabase client
+│   │   ├── api-client.ts       # Frontend API calls
+│   │   ├── api-store.ts        # Server-side task operations
+│   │   ├── projects-store.ts   # Server-side project operations
+│   │   ├── validation.ts       # Zod schemas
+│   │   ├── logger.ts           # Activity logging
+│   │   └── types.ts            # TypeScript types
+│   └── middleware.ts           # Auth middleware
 ├── tests/
-│   ├── unit/              # Unit tests
-│   ├── integration/       # API tests
-│   └── e2e/               # Playwright E2E tests
+│   └── unit/                   # Vitest unit tests
 └── docs/
-    ├── API.md             # API documentation
-    └── DEPLOYMENT.md      # Deployment guide
+    └── ...
 ```
 
-### Database Schema
-```prisma
-model Task {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  status      Status   @default(BACKLOG)
-  priority    Priority @default(MEDIUM)
-  creator     Creator  @default(MOBY)
-  needsReview Boolean  @default(false)
-  position    Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  // Future: relations
-  // comments Comment[]
-  // tags     Tag[]
-}
+### Database Schema (Supabase)
 
-enum Status {
-  BACKLOG
-  IN_PROGRESS
-  DONE
-}
+```sql
+-- Tasks table
+create table tasks (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  description text,
+  status text not null default 'BACKLOG',
+  priority text not null default 'MEDIUM',
+  creator text not null default 'MOBY',
+  needs_review boolean default false,
+  position integer default 0,
+  project_id uuid references projects(id),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
 
-enum Priority {
-  LOW
-  MEDIUM
-  HIGH
-  URGENT
-}
+-- Projects table
+create table projects (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  description text,
+  color text default '#3b82f6',
+  position integer default 0,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
 
-enum Creator {
-  MOBY
-  STEPHAN
-}
+-- Activity logs table
+create table activity_logs (
+  id uuid primary key default gen_random_uuid(),
+  level text not null,
+  message text not null,
+  path text,
+  method text,
+  status_code integer,
+  duration integer,
+  context jsonb,
+  created_at timestamptz default now()
+);
 ```
 
 ### API Endpoints
+
+All endpoints require authentication (GitHub OAuth session or API key header).
+
+#### Tasks
 ```
 GET    /api/tasks          # List all tasks
 POST   /api/tasks          # Create task
@@ -165,6 +183,58 @@ GET    /api/tasks/:id      # Get single task
 PATCH  /api/tasks/:id      # Update task
 DELETE /api/tasks/:id      # Delete task
 POST   /api/tasks/:id/flag # Toggle review flag
+```
+
+#### Projects
+```
+GET    /api/projects          # List all projects
+POST   /api/projects          # Create project
+GET    /api/projects/:id      # Get single project
+PATCH  /api/projects/:id      # Update project
+DELETE /api/projects/:id      # Delete project
+POST   /api/projects/reorder  # Reorder projects
+```
+
+### Authentication
+
+#### Browser Access
+- GitHub OAuth via NextAuth.js
+- Only users in `ALLOWED_GITHUB_USERS` env var can access
+- Session-based authentication
+
+#### API Access (for bots like Moby)
+```bash
+curl -X POST https://moby-kanban.vercel.app/api/tasks \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key" \
+  -d '{"title": "New task", "creator": "MOBY"}'
+```
+
+---
+
+## Environment Variables
+
+```bash
+# Supabase (server-side)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+# Supabase (client-side)
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+
+# GitHub OAuth
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
+
+# NextAuth
+AUTH_SECRET=generate-with-openssl-rand-base64-32
+
+# Access Control
+ALLOWED_GITHUB_USERS=username1,username2
+
+# API Key (for programmatic access)
+API_KEY=generate-a-secure-random-key
 ```
 
 ---
@@ -184,110 +254,39 @@ Text:          #f1f5f9 (light gray)
 Text Muted:    #94a3b8 (medium gray)
 ```
 
-### Typography
-- Font: Inter (system fallback: system-ui)
-- Headings: Bold, tight tracking
-- Body: Regular weight, relaxed line height
-
-### Components (shadcn/ui)
-- Card (for task cards)
-- Button (actions)
-- Dialog (modals)
-- Badge (priority, status)
-- DropdownMenu (task actions)
-- Tooltip (hover info)
-
 ### Animations
 - Cards: Scale up slightly on hover
 - Drag: Rotate slightly when dragging
 - Transitions: 150ms ease-out for all
-- Column drop: Subtle pulse animation
+- Optimistic updates for instant feedback
 
 ---
 
-## Testing Strategy
+## Testing
 
 ### Unit Tests (Vitest)
-- Task CRUD operations
-- Status transitions
-- Priority sorting
-- Flag toggling
+- Validation schemas
+- Type definitions
+- Utility functions
 
-### Integration Tests
-- API endpoints
-- Database operations
-- Server actions
-
-### E2E Tests (Playwright)
-- Create and move tasks
-- Edit task details
-- Flag for review workflow
-- Mobile responsiveness
-
-### Coverage Target
-- Minimum 80% code coverage
-- 100% coverage on critical paths (CRUD, drag-drop)
-
----
-
-## Performance Requirements
-
-- Initial load: < 1s (on fast 3G)
-- Interaction response: < 100ms
-- Drag feedback: < 16ms (60fps)
-- Database queries: < 50ms
-
----
-
-## Accessibility
-
-- Full keyboard navigation
-- ARIA labels on interactive elements
-- Focus visible indicators
-- Color contrast WCAG AA compliant
-- Screen reader friendly
+### Coverage
+- `npm run test` — watch mode
+- `npm run test:run` — single run
+- `npm run test:coverage` — with coverage report
 
 ---
 
 ## Deployment
 
-### Vercel Configuration
+### Vercel
 - Framework: Next.js
 - Build: `npm run build`
-- Output: Standalone
-- Environment: Production
+- Preview deployments on every PR
 
-### Environment Variables
-```
-DATABASE_URL=file:./dev.db
-```
-
-### Preview Deployments
-- Every PR gets a preview URL
-- Preview uses separate database instance
+### GitHub Actions
+- PR Checks: lint, typecheck, test, build
+- Codex Review: AI code review on PRs
 
 ---
 
-## Success Criteria
-
-1. ✅ Board displays with three columns
-2. ✅ Tasks can be created, edited, deleted
-3. ✅ Drag and drop works smoothly
-4. ✅ Review flag system works
-5. ✅ Mobile responsive
-6. ✅ All tests passing
-7. ✅ Deployed to Vercel
-8. ✅ Documentation complete
-
----
-
-## Timeline
-
-- **Hour 1-2**: Project setup, database, basic UI
-- **Hour 2-3**: Drag and drop, task modal
-- **Hour 3-4**: Polish, tests, documentation
-- **Hour 4+**: Review, iterate, ship
-
----
-
-*Spec v1.0 - Created by Moby 🐋*
+*Spec v2.0 - Updated February 2026*
