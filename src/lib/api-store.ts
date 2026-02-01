@@ -231,6 +231,39 @@ export async function deleteTask(id: string): Promise<Result<void, DbError>> {
   }
 }
 
+export async function reorderTasks(
+  taskIds: string[],
+  status: Status
+): Promise<Result<Task[], DbError>> {
+  try {
+    const supabase = createAdminClient();
+
+    // Update each task's position based on array order
+    const updates = taskIds.map((id, index) => ({
+      id,
+      status,
+      position: index,
+      updated_at: new Date().toISOString(),
+    }));
+
+    // Use upsert to update all positions atomically
+    const { data, error } = await supabase
+      .from("tasks")
+      .upsert(updates, { onConflict: "id", ignoreDuplicates: false })
+      .select();
+
+    if (error) {
+      console.error("Failed to reorder tasks:", error);
+      return err(new DbError(error.message, "CONNECTION"));
+    }
+
+    return ok((data || []).map((row: TaskRow) => rowToTask(row)));
+  } catch (error) {
+    console.error("Failed to reorder tasks:", error);
+    return err(new DbError(String(error), "UNKNOWN"));
+  }
+}
+
 export async function toggleTaskFlag(id: string): Promise<Result<Task, DbError>> {
   const taskResult = await getTaskById(id);
   if (!taskResult.ok) {

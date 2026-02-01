@@ -66,29 +66,27 @@ function DroppableProjectItem({
           : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
       } ${isOver && isDraggingTask ? "ring-2 ring-blue-500 bg-blue-500/10" : ""}`}
     >
-      {/* Reorder buttons - only show when not dragging a task */}
-      {!isDraggingTask && (
-        <div className="flex flex-col -my-1">
-          <button
-            onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
-            disabled={isFirst}
-            className={`p-0.5 ${isFirst ? "text-zinc-700 cursor-not-allowed" : "text-zinc-600 hover:text-zinc-400"}`}
-            title="Move up"
-            aria-label={`Move ${project.name} up`}
-          >
-            <ChevronUp className="h-3 w-3" />
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
-            disabled={isLast}
-            className={`p-0.5 ${isLast ? "text-zinc-700 cursor-not-allowed" : "text-zinc-600 hover:text-zinc-400"}`}
-            title="Move down"
-            aria-label={`Move ${project.name} down`}
-          >
-            <ChevronDown className="h-3 w-3" />
-          </button>
-        </div>
-      )}
+      {/* Reorder buttons - always visible, disabled during drag */}
+      <div className="flex flex-col -my-1">
+        <button
+          onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
+          disabled={isFirst || isDraggingTask}
+          className={`p-0.5 ${isFirst || isDraggingTask ? "text-zinc-700 cursor-not-allowed" : "text-zinc-600 hover:text-zinc-400"}`}
+          title="Move up"
+          aria-label={`Move ${project.name} up`}
+        >
+          <ChevronUp className="h-3 w-3" />
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
+          disabled={isLast || isDraggingTask}
+          className={`p-0.5 ${isLast || isDraggingTask ? "text-zinc-700 cursor-not-allowed" : "text-zinc-600 hover:text-zinc-400"}`}
+          title="Move down"
+          aria-label={`Move ${project.name} down`}
+        >
+          <ChevronDown className="h-3 w-3" />
+        </button>
+      </div>
       <button
         onClick={onSelect}
         className="flex-1 flex items-center gap-3 text-left min-w-0"
