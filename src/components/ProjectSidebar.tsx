@@ -1,22 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {
-  DndContext,
-  DragEndEvent,
-  closestCenter,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  useDroppable,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-  arrayMove,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { useDroppable } from "@dnd-kit/core";
 import { Project } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +12,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Folder, ChevronLeft, ChevronRight, Trash2, Edit2, GripVertical } from "lucide-react";
+import { Plus, Folder, ChevronLeft, ChevronRight, Trash2, Edit2, ChevronUp, ChevronDown } from "lucide-react";
 import { useKanbanDnd } from "./KanbanDndContext";
 
 interface ProjectSidebarProps {
@@ -40,71 +25,69 @@ const PROJECT_COLORS = [
   "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16",
 ];
 
-// Sortable + Droppable project item (draggable for reorder, droppable for tasks)
-function SortableProjectItem({
+/**
+ * Droppable project item for receiving task drops.
+ * Uses button-based reordering to avoid nested DndContext issues.
+ */
+function DroppableProjectItem({
   project,
   isSelected,
   onSelect,
   onEdit,
   onDelete,
-  isDraggingTask,
+  onMoveUp,
+  onMoveDown,
+  isFirst,
+  isLast,
 }: {
   project: Project;
   isSelected: boolean;
   onSelect: () => void;
   onEdit: () => void;
   onDelete: () => void;
-  isDraggingTask: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  isFirst: boolean;
+  isLast: boolean;
 }) {
-  // Sortable for project reordering
-  const {
-    attributes,
-    listeners,
-    setNodeRef: setSortableRef,
-    transform,
-    transition,
-    isDragging: isProjectDragging,
-  } = useSortable({ 
-    id: project.id,
-    disabled: isDraggingTask, // Disable sorting when dragging a task
-  });
-
-  // Droppable for task drops
-  const { setNodeRef: setDroppableRef, isOver } = useDroppable({
+  const { isDraggingTask } = useKanbanDnd();
+  
+  // Droppable for task drops - registers with parent KanbanDndContext
+  const { setNodeRef, isOver } = useDroppable({
     id: `project-drop-${project.id}`,
   });
-
-  // Combine refs
-  const setNodeRef = (node: HTMLElement | null) => {
-    setSortableRef(node);
-    setDroppableRef(node);
-  };
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isProjectDragging ? 0.5 : 1,
-  };
 
   return (
     <div
       ref={setNodeRef}
-      style={style}
       className={`group flex items-center gap-1 px-2 py-2 rounded-md transition-all ${
         isSelected
           ? "bg-zinc-800 text-zinc-100"
           : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
       } ${isOver && isDraggingTask ? "ring-2 ring-blue-500 bg-blue-500/10" : ""}`}
     >
-      {/* Drag handle - only show when not dragging a task */}
+      {/* Reorder buttons - only show when not dragging a task */}
       {!isDraggingTask && (
-        <button
-          {...attributes}
-          {...listeners}
-          className="p-1 cursor-grab active:cursor-grabbing text-zinc-600 hover:text-zinc-400 touch-none"
-        >
-          <GripVertical className="h-3 w-3" />
-        </button>
+        <div className="flex flex-col -my-1">
+          <button
+            onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
+            disabled={isFirst}
+            className={`p-0.5 ${isFirst ? "text-zinc-700 cursor-not-allowed" : "text-zinc-600 hover:text-zinc-400"}`}
+            title="Move up"
+            aria-label={`Move ${project.name} up`}
+          >
+            <ChevronUp className="h-3 w-3" />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
+            disabled={isLast}
+            className={`p-0.5 ${isLast ? "text-zinc-700 cursor-not-allowed" : "text-zinc-600 hover:text-zinc-400"}`}
+            title="Move down"
+            aria-label={`Move ${project.name} down`}
+          >
+            <ChevronDown className="h-3 w-3" />
+          </button>
+        </div>
       )}
       <button
         onClick={onSelect}
@@ -126,6 +109,7 @@ function SortableProjectItem({
           onClick={(e) => { e.stopPropagation(); onEdit(); }}
           className="p-1 text-zinc-500 hover:text-zinc-300"
           title="Edit"
+          aria-label={`Edit ${project.name}`}
         >
           <Edit2 className="h-3 w-3" />
         </button>
@@ -133,6 +117,7 @@ function SortableProjectItem({
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
           className="p-1 text-zinc-500 hover:text-red-400"
           title="Delete"
+          aria-label={`Delete ${project.name}`}
         >
           <Trash2 className="h-3 w-3" />
         </button>
@@ -141,7 +126,9 @@ function SortableProjectItem({
   );
 }
 
-// Droppable "No Project" target
+/**
+ * Droppable "No Project" target for removing project from tasks.
+ */
 function DroppableNoProject({ isSelected, onSelect }: { isSelected: boolean; onSelect: () => void }) {
   const { isDraggingTask } = useKanbanDnd();
   const { setNodeRef, isOver } = useDroppable({
@@ -164,6 +151,11 @@ function DroppableNoProject({ isSelected, onSelect }: { isSelected: boolean; onS
   );
 }
 
+/**
+ * Sidebar component for project navigation and management.
+ * Projects can be reordered via up/down buttons.
+ * Tasks can be dropped on projects to assign them.
+ */
 export function ProjectSidebar({ selectedProjectId, onSelectProject }: ProjectSidebarProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -175,13 +167,6 @@ export function ProjectSidebar({ selectedProjectId, onSelectProject }: ProjectSi
   const [projectColor, setProjectColor] = useState(PROJECT_COLORS[0]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { isDraggingTask } = useKanbanDnd();
-
-  // Sensors for project reordering
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 5 },
-    })
-  );
 
   useEffect(() => {
     async function loadProjects() {
@@ -207,29 +192,36 @@ export function ProjectSidebar({ selectedProjectId, onSelectProject }: ProjectSi
     loadProjects();
   }, []);
 
-  // Handle project reorder via drag
-  const handleProjectDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
+  /**
+   * Move a project up or down in the list.
+   */
+  const handleMoveProject = async (projectId: string, direction: "up" | "down") => {
+    const currentIndex = projects.findIndex(p => p.id === projectId);
+    if (currentIndex === -1) return;
+    
+    const newIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (newIndex < 0 || newIndex >= projects.length) return;
 
-    const oldIndex = projects.findIndex(p => p.id === active.id);
-    const newIndex = projects.findIndex(p => p.id === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-
-    const reordered = arrayMove(projects, oldIndex, newIndex);
+    // Swap positions
+    const reordered = [...projects];
+    [reordered[currentIndex], reordered[newIndex]] = [reordered[newIndex], reordered[currentIndex]];
     const updated = reordered.map((p, i) => ({ ...p, position: i }));
     setProjects(updated);
 
     // Persist to API
     try {
-      await fetch("/api/projects/reorder", {
+      const res = await fetch("/api/projects/reorder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectIds: updated.map(p => p.id) }),
       });
+      if (!res.ok) {
+        throw new Error("Failed to reorder");
+      }
     } catch (err) {
       console.error("Failed to reorder projects:", err);
-      setProjects(projects); // Revert
+      // Revert on error
+      setProjects(projects);
     }
   };
 
@@ -248,7 +240,7 @@ export function ProjectSidebar({ selectedProjectId, onSelectProject }: ProjectSi
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           name: projectName,
-          description: projectDescription || null,
+          description: projectDescription.trim() || undefined,
           color: projectColor,
           position: editingProject ? undefined : projects.length,
         }),
@@ -402,30 +394,22 @@ export function ProjectSidebar({ selectedProjectId, onSelectProject }: ProjectSi
           {isLoading ? (
             <div className="px-3 py-4 text-sm text-zinc-500">Loading...</div>
           ) : (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleProjectDragEnd}
-            >
-              <SortableContext
-                items={projects.map(p => p.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                <div className="mt-2 space-y-1">
-                  {projects.map((project) => (
-                    <SortableProjectItem
-                      key={project.id}
-                      project={project}
-                      isSelected={selectedProjectId === project.id}
-                      onSelect={() => onSelectProject(project.id)}
-                      onEdit={() => openEditModal(project)}
-                      onDelete={() => handleDelete(project.id)}
-                      isDraggingTask={isDraggingTask}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
+            <div className="mt-2 space-y-1">
+              {projects.map((project, index) => (
+                <DroppableProjectItem
+                  key={project.id}
+                  project={project}
+                  isSelected={selectedProjectId === project.id}
+                  onSelect={() => onSelectProject(project.id)}
+                  onEdit={() => openEditModal(project)}
+                  onDelete={() => handleDelete(project.id)}
+                  onMoveUp={() => handleMoveProject(project.id, "up")}
+                  onMoveDown={() => handleMoveProject(project.id, "down")}
+                  isFirst={index === 0}
+                  isLast={index === projects.length - 1}
+                />
+              ))}
+            </div>
           )}
         </div>
       </div>
@@ -465,6 +449,8 @@ export function ProjectSidebar({ selectedProjectId, onSelectProject }: ProjectSi
                   <button
                     key={color}
                     onClick={() => setProjectColor(color)}
+                    aria-label={`Select color ${color}`}
+                    aria-pressed={projectColor === color}
                     className={`w-8 h-8 rounded-full transition-transform ${
                       projectColor === color ? "ring-2 ring-white scale-110" : ""
                     }`}
