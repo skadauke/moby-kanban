@@ -5,7 +5,10 @@ export default auth((req) => {
   const isLoggedIn = !!req.auth;
   const isLoginPage = req.nextUrl.pathname === "/login";
   const isAuthApi = req.nextUrl.pathname.startsWith("/api/auth");
-  const isPublicApi = req.nextUrl.pathname === "/api/tasks" && req.method === "GET";
+  // Allow public API access for programmatic management
+  const isPublicApi = 
+    (req.nextUrl.pathname === "/api/tasks" && req.method === "GET") ||
+    req.nextUrl.pathname.startsWith("/api/projects");
 
   // Allow auth API routes
   if (isAuthApi) {
