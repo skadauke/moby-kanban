@@ -1,0 +1,70 @@
+# CodeRabbit Configuration
+# https://docs.coderabbit.ai/guides/configure-coderabbit
+
+language: en-US
+
+reviews:
+  # Enable AI-powered code review
+  enabled: true
+  
+  # Review profile - thorough but not nitpicky
+  profile: assertive
+  
+  # Request changes for serious issues
+  request_changes_workflow: true
+  
+  # Auto-review when PR is ready
+  auto_review:
+    enabled: true
+    drafts: false
+
+  # What to review
+  path_instructions:
+    - path: "**/*.ts"
+      instructions: |
+        Review TypeScript code for:
+        - Type safety (avoid `any`, proper generics)
+        - Error handling (no silent failures)
+        - Null/undefined handling
+        - Async/await correctness
+    
+    - path: "**/*.tsx"
+      instructions: |
+        Review React components for:
+        - Proper hook usage and dependencies
+        - Key prop in lists
+        - Memory leaks (cleanup in useEffect)
+        - Accessibility (labels, ARIA)
+    
+    - path: "**/api/**"
+      instructions: |
+        Review API routes for:
+        - Input validation
+        - Authentication/authorization checks
+        - Error responses (meaningful, not leaking internals)
+        - Rate limiting considerations
+
+# Custom review instructions
+instructions: |
+  You are reviewing code for a vibe² coding project. The author is an AI (Opus 4.5).
+  
+  Focus on catching:
+  1. Security issues (hardcoded secrets, injection vulnerabilities, auth bypasses)
+  2. Logic errors and edge cases the author may have missed
+  3. Performance anti-patterns (N+1 queries, missing memoization)
+  4. Error handling gaps
+  
+  Project-specific gotchas to check:
+  - Using `echo` instead of `printf '%s'` when piping values (causes newline issues)
+  - Trailing newlines in credentials/env vars
+  - Generic error messages (should be specific)
+  
+  Don't nitpick on:
+  - Minor style preferences already covered by linting
+  - Suggestions that are "nice to have" but not important
+  
+  Be direct. If something is wrong, say so clearly. If it's fine, approve.
+
+chat:
+  # Allow interacting with CodeRabbit via comments
+  enabled: true

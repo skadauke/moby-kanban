@@ -1,37 +1,106 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🐋 Moby Kanban
+
+[![CI](https://github.com/skadauke/moby-kanban/actions/workflows/pr-checks.yml/badge.svg)](https://github.com/skadauke/moby-kanban/actions/workflows/pr-checks.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+AI-Human Project Tracker — A visual kanban board for managing tasks between humans and AI collaborators.
+
+## Features
+
+- 📋 Drag-and-drop kanban board (Backlog → In Progress → Done)
+- 📁 Project organization with color-coded sidebar
+- 👥 Task assignment (Moby 🐋 or Stephan 👤)
+- 🚩 Flag tasks for review
+- 🔐 GitHub OAuth authentication
+- 📱 Responsive design
+
+## Tech Stack
+
+- **Framework:** Next.js 16 (App Router)
+- **Database:** Supabase (PostgreSQL)
+- **Auth:** NextAuth.js with GitHub provider
+- **Styling:** Tailwind CSS + shadcn/ui
+- **Deployment:** Vercel
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 20+
+- Supabase account
+- GitHub OAuth app
+
+### Installation
 
 ```bash
+# Clone the repo
+git clone https://github.com/skadauke/moby-kanban.git
+cd moby-kanban
+
+# Install dependencies
+npm install
+
+# Set up environment variables
+cp .env.example .env.local
+# Edit .env.local with your credentials
+
+# Run development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to see the app.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
 
-## Learn More
+# GitHub OAuth
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
 
-To learn more about Next.js, take a look at the following resources:
+# NextAuth
+AUTH_SECRET=
+NEXTAUTH_URL=
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# Access Control
+ALLOWED_GITHUB_USERS=username1,username2
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Development
 
-## Deploy on Vercel
+```bash
+npm run dev      # Start dev server
+npm run build    # Build for production
+npm run lint     # Run ESLint
+npm test         # Run tests
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## API
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-Testing CodeRabbit
+### Tasks
+- `GET /api/tasks` — List all tasks
+- `POST /api/tasks` — Create task
+- `PATCH /api/tasks/:id` — Update task
+- `DELETE /api/tasks/:id` — Delete task
+
+### Projects
+- `GET /api/projects` — List all projects
+- `POST /api/projects` — Create project
+- `PATCH /api/projects/:id` — Update project
+- `DELETE /api/projects/:id` — Delete project
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and guidelines.
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
+
+## License
+
+MIT — see [LICENSE](LICENSE) for details.
