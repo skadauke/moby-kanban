@@ -204,7 +204,8 @@ For each finding: file path, description, suggested fix.
 Be specific and actionable. Skip obvious linter-catchable issues.
 End with a brief summary and version bump recommendation.`;
 
-  const response = await fetch('https://api.openai.com/v1/responses', {
+  // Submit request in background mode for long-running reviews
+  const submitResponse = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -216,31 +217,65 @@ End with a brief summary and version bump recommendation.`;
       reasoning: {
         effort: 'high',
       },
+      background: true,
     }),
   });
 
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`OpenAI API error: ${response.status} ${error}`);
+  if (!submitResponse.ok) {
+    const error = await submitResponse.text();
+    throw new Error(`OpenAI API error: ${submitResponse.status} ${error}`);
   }
 
-  const data = await response.json();
-  
-  // Extract text from responses API output (message content only)
-  if (data.output && data.output.length > 0) {
-    for (const output of data.output) {
-      if (output.type === 'message' && output.content) {
-        const texts = output.content
-          .filter(c => c.type === 'output_text')
-          .map(c => c.text || '');
-        if (texts.length > 0) {
-          return texts.join('\n');
+  const submitData = await submitResponse.json();
+  const responseId = submitData.id;
+  console.error(`   Request submitted (ID: ${responseId}), polling for completion...`);
+
+  // Poll for completion (up to 10 minutes)
+  const maxWaitMs = 10 * 60 * 1000;
+  const pollIntervalMs = 5000;
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < maxWaitMs) {
+    await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+    
+    const pollResponse = await fetch(`https://api.openai.com/v1/responses/${responseId}`, {
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      },
+    });
+
+    if (!pollResponse.ok) {
+      const error = await pollResponse.text();
+      throw new Error(`Poll error: ${pollResponse.status} ${error}`);
+    }
+
+    const data = await pollResponse.json();
+    
+    if (data.status === 'completed') {
+      // Extract text from responses API output (message content only)
+      if (data.output && data.output.length > 0) {
+        for (const output of data.output) {
+          if (output.type === 'message' && output.content) {
+            const texts = output.content
+              .filter(c => c.type === 'output_text')
+              .map(c => c.text || '');
+            if (texts.length > 0) {
+              return texts.join('\n');
+            }
+          }
         }
       }
+      return 'No review output generated.';
+    } else if (data.status === 'failed') {
+      throw new Error(`Review failed: ${JSON.stringify(data.error)}`);
     }
+    
+    // Still in progress
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+    console.error(`   Still processing... (${elapsed}s)`);
   }
-  
-  return 'No review output generated.';
+
+  throw new Error('Review timed out after 10 minutes');
 }
 
 async function main() {
