@@ -120,7 +120,7 @@ export function KanbanDndProvider({
     }
   }, [tasks, onTaskStatusChange, onTaskProjectChange, onTaskReorder]);
 
-  // Custom collision detection: prioritize project drop targets, then task cards for sorting, then columns
+  // Custom collision detection: prioritize project drops, then use pointer position for columns
   const customCollisionDetection: CollisionDetection = useCallback((args) => {
     // Use pointer-within for project drops (more precise for sidebar)
     const pointerCollisions = pointerWithin(args);
@@ -131,29 +131,41 @@ export function KanbanDndProvider({
       return [projectHit];
     }
     
-    // Use closest center for sorting - this finds task cards first
-    const centerCollisions = closestCenter(args);
-    
-    // Check if we hit a task card (not a column or project)
-    const taskHit = centerCollisions.find(c => {
-      const id = c.id as string;
-      return !COLUMNS.some(col => col.id === id) && !id.startsWith("project-drop-");
-    });
-    if (taskHit) {
-      return [taskHit];
-    }
-    
-    // Fall back to rect intersection for columns
+    // Check which column the pointer is over using rect intersection
     const rectCollisions = rectIntersection(args);
     const columnHit = rectCollisions.find(c => 
       COLUMNS.some(col => col.id === c.id)
     );
+    
+    // Use closest center to find nearby task cards
+    const centerCollisions = closestCenter(args);
+    
+    // Find task cards that are in the same column as where the pointer is
+    const taskHit = centerCollisions.find(c => {
+      const id = c.id as string;
+      // Skip columns and project drops
+      if (COLUMNS.some(col => col.id === id) || id.startsWith("project-drop-")) {
+        return false;
+      }
+      // If we have a column hit, only accept task cards in that column
+      if (columnHit) {
+        const task = tasks.find(t => t.id === id);
+        return task && task.status === columnHit.id;
+      }
+      return true;
+    });
+    
+    if (taskHit) {
+      return [taskHit];
+    }
+    
+    // If no task card in current column, return the column itself
     if (columnHit) {
       return [columnHit];
     }
 
     return centerCollisions;
-  }, []);
+  }, [tasks]);
 
   return (
     <KanbanDndStateContext.Provider value={{ activeTask, isDraggingTask: !!activeTask }}>
