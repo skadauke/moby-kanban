@@ -237,27 +237,32 @@ export async function reorderTasks(
 ): Promise<Result<Task[], DbError>> {
   try {
     const supabase = createAdminClient();
+    const updatedAt = new Date().toISOString();
 
-    // Update each task's position based on array order
-    const updates = taskIds.map((id, index) => ({
-      id,
-      status,
-      position: index,
-      updated_at: new Date().toISOString(),
-    }));
+    // Update each task's position individually
+    const updatePromises = taskIds.map((id, index) =>
+      supabase
+        .from("tasks")
+        .update({ status, position: index, updated_at: updatedAt })
+        .eq("id", id)
+        .select()
+        .single()
+    );
 
-    // Use upsert to update all positions atomically
-    const { data, error } = await supabase
-      .from("tasks")
-      .upsert(updates, { onConflict: "id", ignoreDuplicates: false })
-      .select();
+    const results = await Promise.all(updatePromises);
 
-    if (error) {
-      console.error("Failed to reorder tasks:", error);
-      return err(new DbError(error.message, "CONNECTION"));
+    // Check for errors
+    const errors = results.filter(r => r.error);
+    if (errors.length > 0) {
+      console.error("Failed to reorder tasks:", errors[0].error);
+      return err(new DbError(errors[0].error!.message, "CONNECTION"));
     }
 
-    return ok((data || []).map((row: TaskRow) => rowToTask(row)));
+    const tasks = results
+      .filter(r => r.data)
+      .map(r => rowToTask(r.data as TaskRow));
+
+    return ok(tasks);
   } catch (error) {
     console.error("Failed to reorder tasks:", error);
     return err(new DbError(String(error), "UNKNOWN"));
