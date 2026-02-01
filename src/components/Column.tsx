@@ -1,6 +1,5 @@
 "use client";
 
-import { useDroppable } from "@dnd-kit/core";
 import {
   SortableContext,
   verticalListSortingStrategy,
@@ -12,14 +11,13 @@ interface ColumnProps {
   id: Status;
   title: string;
   tasks: Task[];
+  isOver?: boolean;
   onEditTask: (task: Task) => void;
   onDeleteTask: (taskId: string) => void;
   onToggleFlag: (taskId: string) => void;
 }
 
-export function Column({ id, title, tasks, onEditTask, onDeleteTask, onToggleFlag }: ColumnProps) {
-  const { setNodeRef, isOver } = useDroppable({ id });
-
+export function Column({ id, title, tasks, isOver, onEditTask, onDeleteTask, onToggleFlag }: ColumnProps) {
   const columnColors: Record<Status, string> = {
     BACKLOG: "border-zinc-600",
     IN_PROGRESS: "border-blue-600",
@@ -28,7 +26,7 @@ export function Column({ id, title, tasks, onEditTask, onDeleteTask, onToggleFla
 
   return (
     <div
-      className={`flex flex-col bg-zinc-950 rounded-lg border-t-4 ${columnColors[id]} min-h-[500px]`}
+      className={`flex flex-col bg-zinc-950 rounded-lg border-t-4 ${columnColors[id]} h-full`}
     >
       <div className="p-4 border-b border-zinc-800">
         <div className="flex items-center justify-between">
@@ -39,8 +37,7 @@ export function Column({ id, title, tasks, onEditTask, onDeleteTask, onToggleFla
         </div>
       </div>
       <div
-        ref={setNodeRef}
-        className={`flex-1 p-2 space-y-2 transition-colors ${
+        className={`flex-1 p-2 space-y-2 transition-colors overflow-y-auto ${
           isOver ? "bg-zinc-900/50" : ""
         }`}
       >

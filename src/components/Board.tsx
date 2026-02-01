@@ -73,7 +73,7 @@ export function Board({
 
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 flex-1">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 flex-1 min-h-0">
         {COLUMNS.map((column) => (
           <DroppableColumn
             key={column.id}
@@ -119,12 +119,13 @@ function DroppableColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`transition-all ${isOver ? "ring-2 ring-blue-500 ring-inset rounded-lg" : ""}`}
+      className={`h-full transition-all ${isOver ? "ring-2 ring-blue-500 ring-inset rounded-lg" : ""}`}
     >
       <Column
         id={id}
         title={title}
         tasks={tasks}
+        isOver={isOver}
         onEditTask={onEditTask}
         onDeleteTask={onDeleteTask}
         onToggleFlag={onToggleFlag}

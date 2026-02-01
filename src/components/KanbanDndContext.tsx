@@ -120,7 +120,7 @@ export function KanbanDndProvider({
     }
   }, [tasks, onTaskStatusChange, onTaskProjectChange, onTaskReorder]);
 
-  // Custom collision detection: prioritize project drop targets when hovering over sidebar
+  // Custom collision detection: prioritize project drop targets, then task cards for sorting, then columns
   const customCollisionDetection: CollisionDetection = useCallback((args) => {
     // Use pointer-within for project drops (more precise for sidebar)
     const pointerCollisions = pointerWithin(args);
@@ -131,7 +131,19 @@ export function KanbanDndProvider({
       return [projectHit];
     }
     
-    // Use rect intersection for columns
+    // Use closest center for sorting - this finds task cards first
+    const centerCollisions = closestCenter(args);
+    
+    // Check if we hit a task card (not a column or project)
+    const taskHit = centerCollisions.find(c => {
+      const id = c.id as string;
+      return !COLUMNS.some(col => col.id === id) && !id.startsWith("project-drop-");
+    });
+    if (taskHit) {
+      return [taskHit];
+    }
+    
+    // Fall back to rect intersection for columns
     const rectCollisions = rectIntersection(args);
     const columnHit = rectCollisions.find(c => 
       COLUMNS.some(col => col.id === c.id)
@@ -140,8 +152,7 @@ export function KanbanDndProvider({
       return [columnHit];
     }
 
-    // Fall back to closest center for task cards
-    return closestCenter(args);
+    return centerCollisions;
   }, []);
 
   return (
