@@ -214,8 +214,7 @@ End with a brief summary and version bump recommendation.`;
       model: MODEL,
       input: prompt,
       reasoning: {
-        effort: 'medium',
-        summary: 'auto',  // Include reasoning summary in output
+        effort: 'high',
       },
     }),
   });
@@ -227,29 +226,21 @@ End with a brief summary and version bump recommendation.`;
 
   const data = await response.json();
   
-  // Extract text from responses API output
-  let result = [];
-  
-  // Include reasoning summary if available
+  // Extract text from responses API output (message content only)
   if (data.output && data.output.length > 0) {
     for (const output of data.output) {
-      if (output.type === 'reasoning' && output.summary && output.summary.length > 0) {
-        result.push('## 🧠 Reasoning Trace\n');
-        result.push(output.summary.map(s => `- ${s.text}`).join('\n'));
-        result.push('\n---\n');
-      }
       if (output.type === 'message' && output.content) {
         const texts = output.content
           .filter(c => c.type === 'output_text')
           .map(c => c.text || '');
         if (texts.length > 0) {
-          result.push(texts.join('\n'));
+          return texts.join('\n');
         }
       }
     }
   }
   
-  return result.length > 0 ? result.join('\n') : 'No review output generated.';
+  return 'No review output generated.';
 }
 
 async function main() {
