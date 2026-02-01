@@ -380,12 +380,6 @@ export function ProjectSidebar({ selectedProjectId, onSelectProject }: ProjectSi
         </div>
 
         <div className="flex-1 overflow-y-auto p-2">
-          {isDraggingTask && (
-            <div className="mb-2 px-2 py-1 text-xs text-blue-400 text-center">
-              Drop on a project to move task
-            </div>
-          )}
-          
           <DroppableNoProject
             isSelected={selectedProjectId === null}
             onSelect={() => onSelectProject(null)}

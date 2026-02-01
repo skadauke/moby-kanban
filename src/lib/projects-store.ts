@@ -219,21 +219,22 @@ export async function reorderProjects(projectIds: string[]): Promise<Result<void
     const supabase = createAdminClient();
     const now = new Date().toISOString();
     
-    // Build bulk update data
-    const updates = projectIds.map((id, position) => ({
-      id,
-      position,
-      updated_at: now,
-    }));
+    // Update each project's position individually
+    // Using Promise.all for parallel execution
+    const updatePromises = projectIds.map((id, position) =>
+      supabase
+        .from("projects")
+        .update({ position, updated_at: now })
+        .eq("id", id)
+    );
 
-    // Use upsert for atomic-ish operation (still not truly atomic, but better)
-    const { error } = await supabase
-      .from("projects")
-      .upsert(updates, { onConflict: "id", ignoreDuplicates: false });
-
-    if (error) {
-      console.error("Failed to reorder projects:", error);
-      return err(new DbError(error.message, "CONNECTION"));
+    const results = await Promise.all(updatePromises);
+    
+    // Check for any errors
+    const failedUpdate = results.find(r => r.error);
+    if (failedUpdate?.error) {
+      console.error("Failed to reorder projects:", failedUpdate.error);
+      return err(new DbError(failedUpdate.error.message, "CONNECTION"));
     }
 
     return ok(undefined);
