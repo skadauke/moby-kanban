@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Task, Status } from "@/lib/types";
-import { fetchTasks, updateTask, deleteTask, toggleTaskFlag } from "@/lib/api-client";
+import { fetchTasks, updateTask, deleteTask, toggleTaskFlag, reorderTasks } from "@/lib/api-client";
 import { Header, FilterType } from "@/components/Header";
 import { Board } from "@/components/Board";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { ProjectSidebar } from "@/components/ProjectSidebar";
 import { KanbanDndProvider } from "@/components/KanbanDndContext";
+import { VersionTag } from "@/components/VersionTag";
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -104,28 +105,29 @@ export default function Home() {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
+    // Calculate new column order
+    const withoutTask = tasks.filter(t => t.id !== taskId);
+    const columnTasks = withoutTask
+      .filter(t => t.status === newStatus)
+      .sort((a, b) => a.position - b.position);
+    
+    // Insert at position
+    columnTasks.splice(newPosition, 0, { ...task, status: newStatus });
+    
+    // Get ordered task IDs for the column
+    const orderedIds = columnTasks.map(t => t.id);
+
     // Optimistically update
     setTasks((prev) => {
-      const withoutTask = prev.filter(t => t.id !== taskId);
-      const columnTasks = withoutTask
-        .filter(t => t.status === newStatus)
-        .sort((a, b) => a.position - b.position);
-      
-      // Insert at position
-      columnTasks.splice(newPosition, 0, { ...task, status: newStatus });
-      
-      // Reindex column
       const reindexed = columnTasks.map((t, i) => ({ ...t, position: i, updatedAt: new Date() }));
-      
-      // Rebuild task list
-      const otherTasks = withoutTask.filter(t => t.status !== newStatus);
+      const otherTasks = prev.filter(t => t.id !== taskId && t.status !== newStatus);
       const newTasks = [...otherTasks, ...reindexed];
       previousTasksRef.current = newTasks;
       return newTasks;
     });
 
     try {
-      await updateTask(taskId, { status: newStatus, position: newPosition });
+      await reorderTasks(orderedIds, newStatus);
     } catch (err) {
       console.error("Failed to update task:", err);
       setTasks(oldTasks);
@@ -140,23 +142,24 @@ export default function Home() {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
+    // Calculate new column order
+    const columnTasks = tasks
+      .filter(t => t.status === task.status)
+      .sort((a, b) => a.position - b.position);
+    
+    const oldIndex = columnTasks.findIndex(t => t.id === taskId);
+    if (oldIndex === -1) return;
+    
+    // Remove and reinsert
+    const [removed] = columnTasks.splice(oldIndex, 1);
+    columnTasks.splice(newPosition, 0, removed);
+    
+    // Get ordered task IDs
+    const orderedIds = columnTasks.map(t => t.id);
+
     // Optimistically update
     setTasks((prev) => {
-      const columnTasks = prev
-        .filter(t => t.status === task.status)
-        .sort((a, b) => a.position - b.position);
-      
-      const oldIndex = columnTasks.findIndex(t => t.id === taskId);
-      if (oldIndex === -1) return prev;
-      
-      // Remove and reinsert
-      const [removed] = columnTasks.splice(oldIndex, 1);
-      columnTasks.splice(newPosition, 0, removed);
-      
-      // Reindex
       const reindexed = columnTasks.map((t, i) => ({ ...t, position: i, updatedAt: new Date() }));
-      
-      // Rebuild task list
       const otherTasks = prev.filter(t => t.status !== task.status);
       const newTasks = [...otherTasks, ...reindexed];
       previousTasksRef.current = newTasks;
@@ -164,7 +167,7 @@ export default function Home() {
     });
 
     try {
-      await updateTask(taskId, { position: newPosition });
+      await reorderTasks(orderedIds, task.status);
     } catch (err) {
       console.error("Failed to reorder task:", err);
       setTasks(oldTasks);
@@ -359,6 +362,7 @@ export default function Home() {
               {toast}
             </div>
           )}
+          <VersionTag />
         </div>
       </KanbanDndProvider>
     </ErrorBoundary>

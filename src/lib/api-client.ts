@@ -79,3 +79,21 @@ export async function toggleTaskFlag(id: string): Promise<Task> {
     updatedAt: new Date(task.updatedAt),
   };
 }
+
+export async function reorderTasks(
+  taskIds: string[],
+  status: Status
+): Promise<Task[]> {
+  const res = await fetch(`${API_BASE}/reorder`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ taskIds, status }),
+  });
+  if (!res.ok) throw new Error("Failed to reorder tasks");
+  const data = await res.json();
+  return data.tasks.map((t: Task) => ({
+    ...t,
+    createdAt: new Date(t.createdAt),
+    updatedAt: new Date(t.updatedAt),
+  }));
+}
