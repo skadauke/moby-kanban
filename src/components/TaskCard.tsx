@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Task, PRIORITIES, CREATORS } from "@/lib/types";
 import { MoreHorizontal, Flag, Trash2, Pencil } from "lucide-react";
+import { Linkify } from "./Linkify";
 
 interface TaskCardProps {
   task: Task;
@@ -107,10 +108,10 @@ export function TaskCard({ task, onEdit, onDelete, onToggleFlag }: TaskCardProps
         {/* Title */}
         <h3 className="font-medium text-sm leading-snug mb-1">{task.title}</h3>
         
-        {/* Description (if any) */}
+        {/* Details (if any) */}
         {task.description && (
           <p className="text-xs text-zinc-400 line-clamp-2 mb-1.5">
-            {task.description}
+            <Linkify text={task.description} />
           </p>
         )}
         

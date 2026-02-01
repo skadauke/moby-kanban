@@ -34,7 +34,7 @@ export interface Column {
 
 export const COLUMNS: { id: Status; title: string }[] = [
   { id: "BACKLOG", title: "Backlog" },
-  { id: "IN_PROGRESS", title: "In Progress" },
+  { id: "IN_PROGRESS", title: "Ready" },
   { id: "DONE", title: "Done" },
 ];
 

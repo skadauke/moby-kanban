@@ -149,12 +149,12 @@ export function TaskModal({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
+            <Label htmlFor="description">Details</Label>
             <Textarea
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional description..."
+              placeholder="Add context, links, notes..."
               className="bg-zinc-900 border-zinc-800 min-h-[100px]"
               disabled={isSubmitting}
             />
