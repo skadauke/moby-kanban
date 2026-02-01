@@ -20,22 +20,44 @@ export default function Home() {
   
   // Keep a ref to previous tasks for rollback
   const previousTasksRef = useRef<Task[]>([]);
+  // Track request sequence to ignore stale responses
+  const loadRequestIdRef = useRef(0);
+  // Track toast timeout for cleanup
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Show temporary toast message
   const showToast = useCallback((message: string) => {
+    // Clear any existing timeout
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
     setToast(message);
-    setTimeout(() => setToast(null), 3000);
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  // Cleanup toast timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+    };
   }, []);
 
   // Fetch tasks from API
   const loadTasks = useCallback(async (isRefresh = false) => {
+    const requestId = ++loadRequestIdRef.current;
     try {
       if (isRefresh) setIsRefreshing(true);
       setError(null);
       const data = await fetchTasks();
+      // Ignore stale responses
+      if (requestId !== loadRequestIdRef.current) return;
       setTasks(data);
       previousTasksRef.current = data;
     } catch (err) {
+      // Ignore errors from stale requests
+      if (requestId !== loadRequestIdRef.current) return;
       if (!isRefresh) {
         setError("Failed to load tasks. Please try again.");
       } else {
@@ -43,8 +65,11 @@ export default function Home() {
       }
       console.error(err);
     } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+      // Only update loading state if this is still the current request
+      if (requestId === loadRequestIdRef.current) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
     }
   }, [showToast]);
 

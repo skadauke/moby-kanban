@@ -41,13 +41,3 @@ export const updateTaskSchema = z.object({
 export function formatZodError(error: z.ZodError<unknown>): string {
   return error.issues.map((e) => e.message).join(", ");
 }
-
-// Sanitize string to prevent XSS
-export function sanitizeString(input: string): string {
-  return input
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#x27;")
-    .replace(/\//g, "&#x2F;");
-}

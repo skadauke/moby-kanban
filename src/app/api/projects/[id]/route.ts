@@ -4,8 +4,8 @@ import { logger } from "@/lib/logger";
 import { z } from "zod";
 
 const updateProjectSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
-  description: z.string().max(500).nullable().optional(),
+  name: z.string().transform(s => s.trim()).pipe(z.string().min(1).max(100)).optional(),
+  description: z.string().transform(s => s.trim()).pipe(z.string().max(500)).nullable().optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   position: z.number().int().min(0).optional(),
 });
