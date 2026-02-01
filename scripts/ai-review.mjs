@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 /**
- * AI Code Review Script
+ * AI Code Review Script using GPT-5.2-Codex (Responses API)
  * 
- * Packages the codebase and diff, sends to OpenAI for review,
+ * Packages the codebase and diff, sends to Codex for review,
  * outputs structured findings for PR comments.
  */
 
@@ -13,9 +13,9 @@ import { join, relative } from 'path';
 
 // Configuration
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const MODEL = process.env.AI_REVIEW_MODEL || 'gpt-5.2';
-const MAX_FILE_SIZE = 50000; // Skip files larger than 50KB
-const MAX_TOTAL_CHARS = 100000; // Limit total context
+const MODEL = process.env.AI_REVIEW_MODEL || 'gpt-5.2-codex';
+const MAX_FILE_SIZE = 50000;
+const MAX_TOTAL_CHARS = 120000;
 
 // File patterns to include
 const INCLUDE_PATTERNS = [
@@ -25,7 +25,6 @@ const INCLUDE_PATTERNS = [
   /\.md$/,
   /\.yml$/,
   /\.yaml$/,
-  /\.css$/,
 ];
 
 // Paths to exclude
@@ -41,25 +40,20 @@ const EXCLUDE_PATHS = [
 ];
 
 function shouldIncludeFile(filePath) {
-  // Check exclusions
   for (const exclude of EXCLUDE_PATHS) {
     if (filePath.includes(exclude)) return false;
   }
-  // Check inclusions
   return INCLUDE_PATTERNS.some(pattern => pattern.test(filePath));
 }
 
 function getAllFiles(dir, baseDir = dir) {
   const files = [];
-  
   try {
     const entries = readdirSync(dir);
     for (const entry of entries) {
       const fullPath = join(dir, entry);
       const relativePath = relative(baseDir, fullPath);
-      
       if (EXCLUDE_PATHS.some(ex => relativePath.startsWith(ex))) continue;
-      
       const stat = statSync(fullPath);
       if (stat.isDirectory()) {
         files.push(...getAllFiles(fullPath, baseDir));
@@ -67,10 +61,7 @@ function getAllFiles(dir, baseDir = dir) {
         files.push({ path: relativePath, size: stat.size });
       }
     }
-  } catch (e) {
-    // Skip unreadable directories
-  }
-  
+  } catch (e) {}
   return files;
 }
 
@@ -78,7 +69,6 @@ function getFileContents(files, baseDir) {
   let totalChars = 0;
   const contents = [];
   
-  // Sort by importance: src/ first, then tests, then config
   files.sort((a, b) => {
     const aIsSrc = a.path.startsWith('src/');
     const bIsSrc = b.path.startsWith('src/');
@@ -92,28 +82,21 @@ function getFileContents(files, baseDir) {
       contents.push(`\n... (truncated, ${files.length - contents.length} more files)`);
       break;
     }
-    
     try {
       const content = readFileSync(join(baseDir, file.path), 'utf-8');
-      const header = `\n=== ${file.path} ===\n`;
-      contents.push(header + content);
+      contents.push(`\n=== ${file.path} ===\n${content}`);
       totalChars += content.length;
-    } catch (e) {
-      // Skip unreadable files
-    }
+    } catch (e) {}
   }
-  
   return contents.join('\n');
 }
 
 function getDiff() {
   try {
-    // Try to get diff against main branch
     const baseBranch = process.env.GITHUB_BASE_REF || 'main';
     return execSync(`git diff origin/${baseBranch}...HEAD`, { encoding: 'utf-8', maxBuffer: 1024 * 1024 });
   } catch (e) {
     try {
-      // Fallback: diff of last commit
       return execSync('git diff HEAD~1', { encoding: 'utf-8', maxBuffer: 1024 * 1024 });
     } catch (e2) {
       return '(Unable to generate diff)';
@@ -129,42 +112,51 @@ function getPackageJson(baseDir) {
   }
 }
 
-async function callOpenAI(prompt, context) {
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      messages: [
-        {
-          role: 'system',
-          content: `You are an expert code reviewer. Your job is to review code changes and flag potential issues.
+function getPrChecklist(baseDir) {
+  try {
+    return readFileSync(join(baseDir, '.github/PULL_REQUEST_TEMPLATE.md'), 'utf-8');
+  } catch (e) {
+    return '';
+  }
+}
 
-Be thorough but practical. Focus on:
-1. **Stale Code**: Files, dependencies, or code that's no longer used
-2. **Security**: Hardcoded secrets, missing auth checks, unsafe patterns
-3. **Bugs**: Logic errors, null pointer risks, race conditions
-4. **Code Quality**: DRY violations, complex functions, unclear naming
-5. **Performance**: N+1 queries, missing memoization, unnecessary rerenders
-6. **Testing**: Missing test coverage for new functionality
-7. **Documentation**: Outdated docs, missing comments for complex logic
+async function callCodexResponses(context) {
+  const prompt = `You are reviewing a codebase for a pull request. Focus on things that automated tools and linters would MISS.
 
-Output format:
-- Use markdown
-- Group findings by severity: 🔴 Critical, 🟠 Warning, 🟡 Suggestion
-- For each finding: file path, line (if applicable), description, suggested fix
-- At the end, give a brief summary
+## Your Review Focus (Non-Obvious Issues)
 
-Be specific and actionable. Don't flag style issues that a linter would catch.`
-        },
-        {
-          role: 'user',
-          content: `Review this codebase and the changes made.
+1. **Stale/Dead Code Detection**
+   - Files that exist but aren't imported anywhere
+   - Dependencies in package.json that aren't used in source
+   - Documentation that references outdated tech/patterns
+   - Commented-out code blocks that should be removed
+   - Configuration for features that no longer exist
 
-## Package.json (dependencies)
+2. **Semantic Versioning & Release Readiness**
+   - Does this change warrant a version bump? (patch/minor/major)
+   - Are there breaking changes that need documentation?
+   - Should CHANGELOG be updated?
+
+3. **Required Files & Project Health**
+   - Is README.md accurate and up-to-date?
+   - Does LICENSE file exist and make sense?
+   - Are required config files present?
+   - Is .gitignore comprehensive?
+
+4. **Architectural Concerns**
+   - Code that works but doesn't match current patterns
+   - Inconsistent approaches across similar files
+   - Technical debt being introduced
+
+5. **Security (Non-Obvious)**
+   - Secrets that might be hardcoded in non-obvious places
+   - Auth checks that are missing or inconsistent
+   - Data exposure through logs or error messages
+
+## PR Checklist (for reference)
+${context.prChecklist}
+
+## Package.json
 \`\`\`json
 ${context.packageJson}
 \`\`\`
@@ -174,16 +166,25 @@ ${context.packageJson}
 ${context.diff.slice(0, 30000)}
 \`\`\`
 
-## Full Codebase
+## Codebase
 ${context.codebase}
 
 ---
 
-Please review and flag any issues.`
-        }
-      ],
-      temperature: 0.3,
-      max_tokens: 4000,
+Review this code. Group findings by severity (🔴 Critical, 🟠 Warning, 🟡 Suggestion).
+For each finding: file path, description, suggested fix.
+Be specific and actionable. Skip obvious linter-catchable issues.
+End with a brief summary and version bump recommendation.`;
+
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      input: prompt,
     }),
   });
 
@@ -193,7 +194,23 @@ Please review and flag any issues.`
   }
 
   const data = await response.json();
-  return data.choices[0].message.content;
+  
+  // Extract text from responses API output
+  // Look for message-type output (skip reasoning)
+  if (data.output && data.output.length > 0) {
+    for (const output of data.output) {
+      if (output.type === 'message' && output.content) {
+        const texts = output.content
+          .filter(c => c.type === 'output_text')
+          .map(c => c.text || '');
+        if (texts.length > 0) {
+          return texts.join('\n');
+        }
+      }
+    }
+  }
+  
+  return 'No review output generated.';
 }
 
 async function main() {
@@ -215,15 +232,13 @@ async function main() {
   console.error(`   Diff: ${diff.length} characters`);
   
   const packageJson = getPackageJson(baseDir);
+  const prChecklist = getPrChecklist(baseDir);
   
-  console.error('🤖 Sending to AI for review...');
+  console.error(`🤖 Sending to ${MODEL} for review...`);
   
   try {
-    const review = await callOpenAI('review', { codebase, diff, packageJson });
-    
-    // Output review to stdout (for GitHub Actions to capture)
+    const review = await callCodexResponses({ codebase, diff, packageJson, prChecklist });
     console.log(review);
-    
   } catch (error) {
     console.error('Error during review:', error.message);
     process.exit(1);
