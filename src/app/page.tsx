@@ -5,6 +5,8 @@ import { Task } from "@/lib/types";
 import { fetchTasks, updateTask, deleteTask, toggleTaskFlag } from "@/lib/api-client";
 import { Header, FilterType } from "@/components/Header";
 import { Board } from "@/components/Board";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -110,14 +112,7 @@ export default function Home() {
   };
 
   if (isLoading) {
-    return (
-      <main className="min-h-screen bg-zinc-900 flex items-center justify-center">
-        <div className="flex items-center gap-3 text-zinc-400">
-          <div className="animate-spin h-5 w-5 border-2 border-zinc-600 border-t-zinc-300 rounded-full" />
-          Loading tasks...
-        </div>
-      </main>
-    );
+    return <LoadingSkeleton />;
   }
 
   if (error) {
@@ -137,21 +132,25 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-900">
-      <Header
-        onTaskCreated={handleTaskCreated}
-        filter={filter}
-        onFilterChange={setFilter}
-        flaggedCount={flaggedCount}
-      />
-      <Board
-        initialTasks={filteredTasks}
-        onTasksChange={handleTasksChange}
-        onDeleteTask={handleDeleteTask}
-        onToggleFlag={handleToggleFlag}
-        onTaskUpdated={handleTaskUpdated}
-        key={`${filter}-${tasks.length}`}
-      />
-    </main>
+    <ErrorBoundary>
+      <main className="min-h-screen bg-zinc-900">
+        <Header
+          onTaskCreated={handleTaskCreated}
+          filter={filter}
+          onFilterChange={setFilter}
+          flaggedCount={flaggedCount}
+          onRefresh={loadTasks}
+          isRefreshing={isLoading}
+        />
+        <Board
+          initialTasks={filteredTasks}
+          onTasksChange={handleTasksChange}
+          onDeleteTask={handleDeleteTask}
+          onToggleFlag={handleToggleFlag}
+          onTaskUpdated={handleTaskUpdated}
+          key={`${filter}-${tasks.length}`}
+        />
+      </main>
+    </ErrorBoundary>
   );
 }
