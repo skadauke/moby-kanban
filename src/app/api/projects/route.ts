@@ -4,8 +4,8 @@ import { logger } from "@/lib/logger";
 import { z } from "zod";
 
 const createProjectSchema = z.object({
-  name: z.string().min(1, "Name is required").max(100),
-  description: z.string().max(500).optional(),
+  name: z.string().transform(s => s.trim()).pipe(z.string().min(1, "Name is required").max(100)),
+  description: z.string().transform(s => s.trim()).pipe(z.string().max(500)).optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Invalid color format").optional(),
 });
 
