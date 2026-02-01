@@ -14,6 +14,7 @@ export const createTaskSchema = z.object({
     .transform((s) => s?.trim() || undefined),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional().default("MEDIUM"),
   creator: z.enum(["MOBY", "STEPHAN"]).optional().default("MOBY"),
+  projectId: z.string().uuid().optional(),
 });
 
 // Task update schema

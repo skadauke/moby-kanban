@@ -24,6 +24,7 @@ interface HeaderProps {
   flaggedCount: number;
   onRefresh?: () => void;
   isRefreshing?: boolean;
+  selectedProjectId?: string | null;
 }
 
 export function Header({
@@ -33,6 +34,7 @@ export function Header({
   flaggedCount,
   onRefresh,
   isRefreshing,
+  selectedProjectId,
 }: HeaderProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { data: session } = useSession();
@@ -145,6 +147,7 @@ export function Header({
           setIsModalOpen(false);
         }}
         defaultCreator={defaultCreator}
+        defaultProjectId={selectedProjectId}
       />
     </>
   );

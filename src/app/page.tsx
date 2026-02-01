@@ -7,12 +7,14 @@ import { Header, FilterType } from "@/components/Header";
 import { Board } from "@/components/Board";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { ProjectSidebar } from "@/components/ProjectSidebar";
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
   // Fetch tasks from API
   const loadTasks = useCallback(async () => {
@@ -33,17 +35,23 @@ export default function Home() {
   }, [loadTasks]);
 
   const filteredTasks = useMemo(() => {
+    // First filter by project
+    let result = selectedProjectId
+      ? tasks.filter((t) => t.projectId === selectedProjectId)
+      : tasks;
+    
+    // Then apply creator/flag filters
     switch (filter) {
       case "flagged":
-        return tasks.filter((t) => t.needsReview);
+        return result.filter((t) => t.needsReview);
       case "moby":
-        return tasks.filter((t) => t.creator === "MOBY");
+        return result.filter((t) => t.creator === "MOBY");
       case "stephan":
-        return tasks.filter((t) => t.creator === "STEPHAN");
+        return result.filter((t) => t.creator === "STEPHAN");
       default:
-        return tasks;
+        return result;
     }
-  }, [tasks, filter]);
+  }, [tasks, filter, selectedProjectId]);
 
   const flaggedCount = useMemo(
     () => tasks.filter((t) => t.needsReview).length,
@@ -133,24 +141,31 @@ export default function Home() {
 
   return (
     <ErrorBoundary>
-      <main className="min-h-screen bg-zinc-900">
-        <Header
-          onTaskCreated={handleTaskCreated}
-          filter={filter}
-          onFilterChange={setFilter}
-          flaggedCount={flaggedCount}
-          onRefresh={loadTasks}
-          isRefreshing={isLoading}
+      <div className="min-h-screen bg-zinc-900 flex">
+        <ProjectSidebar
+          selectedProjectId={selectedProjectId}
+          onSelectProject={setSelectedProjectId}
         />
-        <Board
-          initialTasks={filteredTasks}
-          onTasksChange={handleTasksChange}
-          onDeleteTask={handleDeleteTask}
-          onToggleFlag={handleToggleFlag}
-          onTaskUpdated={handleTaskUpdated}
-          key={`${filter}-${tasks.length}`}
-        />
-      </main>
+        <main className="flex-1 flex flex-col min-h-screen">
+          <Header
+            onTaskCreated={handleTaskCreated}
+            filter={filter}
+            onFilterChange={setFilter}
+            flaggedCount={flaggedCount}
+            onRefresh={loadTasks}
+            isRefreshing={isLoading}
+            selectedProjectId={selectedProjectId}
+          />
+          <Board
+            initialTasks={filteredTasks}
+            onTasksChange={handleTasksChange}
+            onDeleteTask={handleDeleteTask}
+            onToggleFlag={handleToggleFlag}
+            onTaskUpdated={handleTaskUpdated}
+            key={`${filter}-${selectedProjectId}-${tasks.length}`}
+          />
+        </main>
+      </div>
     </ErrorBoundary>
   );
 }

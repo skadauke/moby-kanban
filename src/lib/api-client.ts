@@ -18,6 +18,7 @@ export async function createTask(data: {
   description?: string;
   priority?: Priority;
   creator?: Creator;
+  projectId?: string;
 }): Promise<Task> {
   const res = await fetch(API_BASE, {
     method: "POST",

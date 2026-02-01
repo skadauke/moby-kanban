@@ -29,6 +29,7 @@ interface TaskModalProps {
   onTaskUpdated: (task: Task) => void;
   onTaskCreated: (task: Task) => void;
   defaultCreator?: Creator;
+  defaultProjectId?: string | null;
 }
 
 export function TaskModal({
@@ -38,6 +39,7 @@ export function TaskModal({
   onTaskUpdated,
   onTaskCreated,
   defaultCreator = "MOBY",
+  defaultProjectId = null,
 }: TaskModalProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -89,6 +91,7 @@ export function TaskModal({
           description: description || undefined,
           priority: priority || undefined,
           creator,
+          projectId: defaultProjectId || undefined,
         });
         onTaskCreated(created);
       }
