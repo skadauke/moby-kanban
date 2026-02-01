@@ -1,7 +1,6 @@
 "use client";
 
 import { useDraggable } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,9 +29,10 @@ export function TaskCard({ task, onEdit, onDelete, onToggleFlag }: TaskCardProps
     isDragging,
   } = useDraggable({ id: task.id });
 
+  // When dragging, hide the original card completely - DragOverlay handles the visual
   const style = {
-    transform: transform ? CSS.Transform.toString(transform) : undefined,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0 : 1,
+    // Don't apply transform to original - causes ghost artifacts with DragOverlay
   };
 
   const priority = PRIORITIES.find((p) => p.value === task.priority);
