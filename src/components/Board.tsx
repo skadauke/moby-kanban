@@ -12,7 +12,6 @@ import {
   useSensors,
   closestCorners,
 } from "@dnd-kit/core";
-import { arrayMove } from "@dnd-kit/sortable";
 import { Task, Status, COLUMNS } from "@/lib/types";
 import { Column } from "./Column";
 import { TaskCard } from "./TaskCard";
