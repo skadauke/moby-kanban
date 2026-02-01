@@ -120,38 +120,66 @@ function getPrChecklist(baseDir) {
   }
 }
 
+function getSpec(baseDir) {
+  try {
+    return readFileSync(join(baseDir, 'SPEC.md'), 'utf-8');
+  } catch (e) {
+    return '';
+  }
+}
+
 async function callCodexResponses(context) {
-  const prompt = `You are reviewing a codebase for a pull request. Focus on things that automated tools and linters would MISS.
+  const prompt = `You are an expert code reviewer doing an in-depth review. Focus on things that automated tools and linters would MISS.
 
-## Your Review Focus (Non-Obvious Issues)
+## Your Review Focus
 
-1. **Stale/Dead Code Detection**
-   - Files that exist but aren't imported anywhere
-   - Dependencies in package.json that aren't used in source
-   - Documentation that references outdated tech/patterns
-   - Commented-out code blocks that should be removed
-   - Configuration for features that no longer exist
+### 1. Logic & Correctness
+- **Off-by-one errors** in loops, array indexing, pagination
+- **Boundary conditions** and edge cases
+- **Race conditions** in async code
+- **Null/undefined handling** that could cause runtime errors
 
-2. **Semantic Versioning & Release Readiness**
-   - Does this change warrant a version bump? (patch/minor/major)
-   - Are there breaking changes that need documentation?
-   - Should CHANGELOG be updated?
+### 2. Data Validation
+- **Input validation** - are all user inputs validated strictly?
+- **Type coercion issues** - implicit conversions that could cause bugs
+- **API request/response validation** - are schemas enforced?
 
-3. **Required Files & Project Health**
-   - Is README.md accurate and up-to-date?
-   - Does LICENSE file exist and make sense?
-   - Are required config files present?
-   - Is .gitignore comprehensive?
+### 3. Test Quality
+- **Coverage gaps** - target >90% coverage; flag untested code paths
+- **Missing edge cases** - empty arrays, null values, boundary values
+- **Test assertions** - are tests actually testing the right things?
+- **Mocking issues** - are mocks hiding real bugs?
 
-4. **Architectural Concerns**
-   - Code that works but doesn't match current patterns
-   - Inconsistent approaches across similar files
-   - Technical debt being introduced
+### 4. Spec vs Implementation
+- Compare against SPEC.md if present - does implementation match?
+- Feature completeness - are all specified features implemented?
+- Behavior discrepancies between spec and code
 
-5. **Security (Non-Obvious)**
-   - Secrets that might be hardcoded in non-obvious places
-   - Auth checks that are missing or inconsistent
-   - Data exposure through logs or error messages
+### 5. Documentation & Readability
+- **Code clarity** - would a new developer understand this?
+- **Comment quality** - do comments explain WHY, not just WHAT?
+- **README accuracy** - does it reflect current state?
+- **API documentation** - are endpoints/functions documented?
+
+### 6. Security Vulnerabilities
+- **Auth/authz gaps** - missing or inconsistent access control
+- **Injection risks** - SQL, XSS, command injection
+- **Secrets exposure** - hardcoded credentials, logged secrets
+- **CSRF/CORS issues** - misconfigured security headers
+
+### 7. Stale/Dead Code
+- Files not imported anywhere
+- Unused dependencies in package.json
+- Outdated documentation referencing removed features
+- Commented-out code that should be deleted
+
+### 8. Semantic Versioning
+- Does this change warrant a version bump? (patch/minor/major)
+- Breaking changes that need documentation?
+- CHANGELOG update needed?
+
+## Product Specification (SPEC.md)
+${context.spec || '(No SPEC.md found)'}
 
 ## PR Checklist (for reference)
 ${context.prChecklist}
@@ -185,6 +213,10 @@ End with a brief summary and version bump recommendation.`;
     body: JSON.stringify({
       model: MODEL,
       input: prompt,
+      reasoning: {
+        effort: 'medium',
+        summary: 'auto',  // Include reasoning summary in output
+      },
     }),
   });
 
@@ -196,21 +228,28 @@ End with a brief summary and version bump recommendation.`;
   const data = await response.json();
   
   // Extract text from responses API output
-  // Look for message-type output (skip reasoning)
+  let result = [];
+  
+  // Include reasoning summary if available
   if (data.output && data.output.length > 0) {
     for (const output of data.output) {
+      if (output.type === 'reasoning' && output.summary && output.summary.length > 0) {
+        result.push('## 🧠 Reasoning Trace\n');
+        result.push(output.summary.map(s => `- ${s.text}`).join('\n'));
+        result.push('\n---\n');
+      }
       if (output.type === 'message' && output.content) {
         const texts = output.content
           .filter(c => c.type === 'output_text')
           .map(c => c.text || '');
         if (texts.length > 0) {
-          return texts.join('\n');
+          result.push(texts.join('\n'));
         }
       }
     }
   }
   
-  return 'No review output generated.';
+  return result.length > 0 ? result.join('\n') : 'No review output generated.';
 }
 
 async function main() {
@@ -233,11 +272,12 @@ async function main() {
   
   const packageJson = getPackageJson(baseDir);
   const prChecklist = getPrChecklist(baseDir);
+  const spec = getSpec(baseDir);
   
   console.error(`🤖 Sending to ${MODEL} for review...`);
   
   try {
-    const review = await callCodexResponses({ codebase, diff, packageJson, prChecklist });
+    const review = await callCodexResponses({ codebase, diff, packageJson, prChecklist, spec });
     console.log(review);
   } catch (error) {
     console.error('Error during review:', error.message);
