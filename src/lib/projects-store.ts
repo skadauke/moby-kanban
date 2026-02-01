@@ -156,3 +156,23 @@ export async function deleteProject(id: string): Promise<boolean> {
     return false;
   }
 }
+
+export async function reorderProjects(projectIds: string[]): Promise<boolean> {
+  try {
+    const supabase = createAdminClient();
+    
+    // Update each project's position based on array order
+    const updates = projectIds.map((id, position) => 
+      supabase
+        .from("projects")
+        .update({ position, updated_at: new Date().toISOString() })
+        .eq("id", id)
+    );
+    
+    await Promise.all(updates);
+    return true;
+  } catch (error) {
+    console.error("Failed to reorder projects:", error);
+    return false;
+  }
+}

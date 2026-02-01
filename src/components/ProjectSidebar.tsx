@@ -1,6 +1,23 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Project } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +28,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Folder, ChevronLeft, ChevronRight, Trash2, Edit2 } from "lucide-react";
+import { Plus, Folder, ChevronLeft, ChevronRight, Trash2, Edit2, GripVertical } from "lucide-react";
 
 interface ProjectSidebarProps {
   selectedProjectId: string | null;
@@ -29,6 +46,80 @@ const PROJECT_COLORS = [
   "#84cc16", // lime
 ];
 
+// Sortable project item component
+function SortableProjectItem({
+  project,
+  isSelected,
+  onSelect,
+  onEdit,
+  onDelete,
+}: {
+  project: Project;
+  isSelected: boolean;
+  onSelect: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: project.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`group flex items-center gap-1 px-2 py-2 rounded-md transition-colors ${
+        isSelected
+          ? "bg-zinc-800 text-zinc-100"
+          : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
+      }`}
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        className="p-1 cursor-grab active:cursor-grabbing text-zinc-600 hover:text-zinc-400"
+      >
+        <GripVertical className="h-3 w-3" />
+      </button>
+      <button
+        onClick={onSelect}
+        className="flex-1 flex items-center gap-3 text-left"
+      >
+        <div
+          className="w-3 h-3 rounded-full flex-shrink-0"
+          style={{ backgroundColor: project.color }}
+        />
+        <span className="text-sm font-medium truncate">{project.name}</span>
+      </button>
+      <div className="hidden group-hover:flex items-center gap-1">
+        <button
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          className="p-1 text-zinc-500 hover:text-zinc-300"
+        >
+          <Edit2 className="h-3 w-3" />
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          className="p-1 text-zinc-500 hover:text-red-400"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function ProjectSidebar({ selectedProjectId, onSelectProject }: ProjectSidebarProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -39,6 +130,13 @@ export function ProjectSidebar({ selectedProjectId, onSelectProject }: ProjectSi
   const [projectColor, setProjectColor] = useState(PROJECT_COLORS[0]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
   // Fetch projects
   useEffect(() => {
     async function loadProjects() {
@@ -46,11 +144,14 @@ export function ProjectSidebar({ selectedProjectId, onSelectProject }: ProjectSi
         const res = await fetch("/api/projects");
         if (res.ok) {
           const data = await res.json();
-          setProjects(data.map((p: Project) => ({
-            ...p,
-            createdAt: new Date(p.createdAt),
-            updatedAt: new Date(p.updatedAt),
-          })));
+          const sorted = data
+            .map((p: Project) => ({
+              ...p,
+              createdAt: new Date(p.createdAt),
+              updatedAt: new Date(p.updatedAt),
+            }))
+            .sort((a: Project, b: Project) => a.position - b.position);
+          setProjects(sorted);
         }
       } catch (err) {
         console.error("Failed to load projects:", err);
@@ -60,6 +161,36 @@ export function ProjectSidebar({ selectedProjectId, onSelectProject }: ProjectSi
     }
     loadProjects();
   }, []);
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = projects.findIndex(p => p.id === active.id);
+    const newIndex = projects.findIndex(p => p.id === over.id);
+
+    const reordered = arrayMove(projects, oldIndex, newIndex);
+    
+    // Update positions
+    const updated = reordered.map((p, i) => ({ ...p, position: i }));
+    setProjects(updated);
+
+    // Persist to API
+    try {
+      await fetch("/api/projects/reorder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectIds: updated.map(p => p.id),
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to reorder projects:", err);
+      // Revert on error
+      setProjects(projects);
+    }
+  };
 
   const handleCreateOrUpdate = async () => {
     if (!projectName.trim()) return;
@@ -74,7 +205,11 @@ export function ProjectSidebar({ selectedProjectId, onSelectProject }: ProjectSi
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: projectName, color: projectColor }),
+        body: JSON.stringify({ 
+          name: projectName, 
+          color: projectColor,
+          position: editingProject ? undefined : projects.length,
+        }),
       });
 
       if (res.ok) {
@@ -148,7 +283,16 @@ export function ProjectSidebar({ selectedProjectId, onSelectProject }: ProjectSi
         >
           <ChevronRight className="h-4 w-4" />
         </Button>
-        <div className="mt-4 space-y-2">
+        <button
+          onClick={() => onSelectProject(null)}
+          className={`mt-4 w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
+            selectedProjectId === null ? "bg-zinc-700" : "hover:bg-zinc-800"
+          }`}
+          title="All Tasks"
+        >
+          <Folder className="h-4 w-4 text-zinc-400" />
+        </button>
+        <div className="mt-2 space-y-2">
           {projects.map(project => (
             <button
               key={project.id}
@@ -210,46 +354,32 @@ export function ProjectSidebar({ selectedProjectId, onSelectProject }: ProjectSi
             <span className="text-sm font-medium">All Tasks</span>
           </button>
 
-          {/* Project list */}
+          {/* Project list with drag-and-drop */}
           {isLoading ? (
             <div className="px-3 py-4 text-sm text-zinc-500">Loading...</div>
           ) : (
-            <div className="mt-2 space-y-1">
-              {projects.map(project => (
-                <div
-                  key={project.id}
-                  className={`group flex items-center gap-2 px-3 py-2 rounded-md transition-colors ${
-                    selectedProjectId === project.id
-                      ? "bg-zinc-800 text-zinc-100"
-                      : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
-                  }`}
+            <div className="mt-2">
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={projects.map(p => p.id)}
+                  strategy={verticalListSortingStrategy}
                 >
-                  <button
-                    onClick={() => onSelectProject(project.id)}
-                    className="flex-1 flex items-center gap-3 text-left"
-                  >
-                    <div
-                      className="w-3 h-3 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: project.color }}
+                  {projects.map(project => (
+                    <SortableProjectItem
+                      key={project.id}
+                      project={project}
+                      isSelected={selectedProjectId === project.id}
+                      onSelect={() => onSelectProject(project.id)}
+                      onEdit={() => openEditModal(project)}
+                      onDelete={() => handleDelete(project.id)}
                     />
-                    <span className="text-sm font-medium truncate">{project.name}</span>
-                  </button>
-                  <div className="hidden group-hover:flex items-center gap-1">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); openEditModal(project); }}
-                      className="p-1 text-zinc-500 hover:text-zinc-300"
-                    >
-                      <Edit2 className="h-3 w-3" />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDelete(project.id); }}
-                      className="p-1 text-zinc-500 hover:text-red-400"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                  ))}
+                </SortableContext>
+              </DndContext>
             </div>
           )}
         </div>
