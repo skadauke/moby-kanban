@@ -1,11 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TaskModal } from "./TaskModal";
-import { Task } from "@/lib/types";
+import { Task, Creator } from "@/lib/types";
 import { Plus, Flag, X, RefreshCw } from "lucide-react";
+
+// Map GitHub usernames to Creator type
+function getCreatorFromSession(session: ReturnType<typeof useSession>["data"]): Creator {
+  const githubUsername = (session?.user as { githubUsername?: string })?.githubUsername?.toLowerCase();
+  if (githubUsername === "skadauke") return "STEPHAN";
+  return "MOBY"; // Default for other users (including Moby's GitHub account)
+}
 
 export type FilterType = "all" | "flagged" | "moby" | "stephan";
 
@@ -27,6 +35,8 @@ export function Header({
   isRefreshing,
 }: HeaderProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const { data: session } = useSession();
+  const defaultCreator = getCreatorFromSession(session);
 
   return (
     <>
@@ -134,6 +144,7 @@ export function Header({
           onTaskCreated(task);
           setIsModalOpen(false);
         }}
+        defaultCreator={defaultCreator}
       />
     </>
   );

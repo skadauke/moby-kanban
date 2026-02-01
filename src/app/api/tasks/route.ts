@@ -63,15 +63,16 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json(task, { status: 201 });
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     await logger.error("Failed to create task", {
       path: "/api/tasks",
       method: "POST",
       statusCode: 500,
       duration: Date.now() - start,
-      context: { error: String(error) },
+      context: { error: errorMessage },
     });
     return NextResponse.json(
-      { error: "Failed to create task" },
+      { error: errorMessage },
       { status: 500 }
     );
   }

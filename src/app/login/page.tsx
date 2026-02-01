@@ -1,7 +1,14 @@
 import { signIn } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
+  const isAccessDenied = error === "AccessDenied";
+
   return (
     <main className="min-h-screen bg-zinc-900 flex items-center justify-center">
       <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-8 max-w-md w-full mx-4">
@@ -10,6 +17,22 @@ export default function LoginPage() {
           <h1 className="text-2xl font-bold text-zinc-100 mb-2">Moby Kanban</h1>
           <p className="text-zinc-400">Sign in to manage your tasks</p>
         </div>
+
+        {isAccessDenied && (
+          <div className="bg-red-950/50 border border-red-800 rounded-lg p-4 mb-6">
+            <p className="text-red-400 text-sm text-center">
+              Access denied. Your GitHub account is not authorized to use this app.
+            </p>
+          </div>
+        )}
+
+        {error && !isAccessDenied && (
+          <div className="bg-yellow-950/50 border border-yellow-800 rounded-lg p-4 mb-6">
+            <p className="text-yellow-400 text-sm text-center">
+              An error occurred during sign in. Please try again.
+            </p>
+          </div>
+        )}
 
         <form
           action={async () => {

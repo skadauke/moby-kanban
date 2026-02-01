@@ -1,26 +1,50 @@
 import { Task, Status, Priority, Creator } from "./types";
-import { db } from "./db";
+import { createAdminClient } from "./supabase/server";
 
-// Generate a simple ID
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+// Database row type (matches Supabase table schema)
+interface TaskRow {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  priority: string;
+  creator: string;
+  needs_review: boolean;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+function rowToTask(row: TaskRow): Task {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    status: row.status as Status,
+    priority: row.priority as Priority,
+    creator: row.creator as Creator,
+    needsReview: row.needs_review,
+    position: row.position,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+  };
 }
 
 export async function getAllTasks(): Promise<Task[]> {
   try {
-    const result = await db.execute("SELECT * FROM Task ORDER BY status ASC, position ASC");
-    return result.rows.map((row) => ({
-      id: row.id as string,
-      title: row.title as string,
-      description: row.description as string | null,
-      status: row.status as Status,
-      priority: row.priority as Priority,
-      creator: row.creator as Creator,
-      needsReview: Boolean(row.needsReview),
-      position: row.position as number,
-      createdAt: new Date(row.createdAt as string),
-      updatedAt: new Date(row.updatedAt as string),
-    }));
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("tasks")
+      .select("*")
+      .order("status", { ascending: true })
+      .order("position", { ascending: true });
+
+    if (error) {
+      console.error("Failed to get tasks:", error);
+      return [];
+    }
+
+    return (data || []).map((row: TaskRow) => rowToTask(row));
   } catch (error) {
     console.error("Failed to get tasks:", error);
     return [];
@@ -29,24 +53,16 @@ export async function getAllTasks(): Promise<Task[]> {
 
 export async function getTaskById(id: string): Promise<Task | null> {
   try {
-    const result = await db.execute({
-      sql: "SELECT * FROM Task WHERE id = ?",
-      args: [id],
-    });
-    if (result.rows.length === 0) return null;
-    const row = result.rows[0];
-    return {
-      id: row.id as string,
-      title: row.title as string,
-      description: row.description as string | null,
-      status: row.status as Status,
-      priority: row.priority as Priority,
-      creator: row.creator as Creator,
-      needsReview: Boolean(row.needsReview),
-      position: row.position as number,
-      createdAt: new Date(row.createdAt as string),
-      updatedAt: new Date(row.updatedAt as string),
-    };
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("tasks")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (error || !data) return null;
+
+    return rowToTask(data as TaskRow);
   } catch (error) {
     console.error("Failed to get task:", error);
     return null;
@@ -59,42 +75,42 @@ export async function createTask(data: {
   priority?: Priority;
   creator?: Creator;
 }): Promise<Task> {
-  const id = generateId();
-  const now = new Date().toISOString();
-  
+  const supabase = createAdminClient();
+
   // Get max position
-  const posResult = await db.execute(
-    "SELECT MAX(position) as maxPos FROM Task WHERE status = 'BACKLOG'"
-  );
-  const maxPos = (posResult.rows[0]?.maxPos as number) ?? -1;
+  const { data: maxPosData } = await supabase
+    .from("tasks")
+    .select("position")
+    .eq("status", "BACKLOG")
+    .order("position", { ascending: false })
+    .limit(1);
 
-  await db.execute({
-    sql: `INSERT INTO Task (id, title, description, status, priority, creator, needsReview, position, createdAt, updatedAt) 
-          VALUES (?, ?, ?, 'BACKLOG', ?, ?, 0, ?, ?, ?)`,
-    args: [
-      id,
-      data.title,
-      data.description || null,
-      data.priority || "MEDIUM",
-      data.creator || "MOBY",
-      maxPos + 1,
-      now,
-      now,
-    ],
-  });
+  const maxPos = maxPosData?.[0]?.position ?? -1;
 
-  return {
-    id,
-    title: data.title,
-    description: data.description || null,
-    status: "BACKLOG",
-    priority: data.priority || "MEDIUM",
-    creator: data.creator || "MOBY",
-    needsReview: false,
-    position: maxPos + 1,
-    createdAt: new Date(now),
-    updatedAt: new Date(now),
-  };
+  const { data: newTask, error } = await supabase
+    .from("tasks")
+    .insert({
+      title: data.title,
+      description: data.description || null,
+      status: "BACKLOG",
+      priority: data.priority || "MEDIUM",
+      creator: data.creator || "MOBY",
+      needs_review: false,
+      position: maxPos + 1,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    const errMsg = error.message || "Unknown database error";
+    const errCode = error.code || "UNKNOWN";
+    throw new Error(`Database error (${errCode}): ${errMsg}`);
+  }
+  if (!newTask) {
+    throw new Error("Task created but no data returned");
+  }
+
+  return rowToTask(newTask as TaskRow);
 }
 
 export async function updateTask(
@@ -110,51 +126,31 @@ export async function updateTask(
   }>
 ): Promise<Task | null> {
   try {
-    const now = new Date().toISOString();
-    const updates: string[] = [];
-    const args: (string | number | null)[] = [];
+    const supabase = createAdminClient();
 
-    if (data.title !== undefined) {
-      updates.push("title = ?");
-      args.push(data.title);
-    }
-    if (data.description !== undefined) {
-      updates.push("description = ?");
-      args.push(data.description);
-    }
-    if (data.status !== undefined) {
-      updates.push("status = ?");
-      args.push(data.status);
-    }
-    if (data.priority !== undefined) {
-      updates.push("priority = ?");
-      args.push(data.priority);
-    }
-    if (data.creator !== undefined) {
-      updates.push("creator = ?");
-      args.push(data.creator);
-    }
-    if (data.needsReview !== undefined) {
-      updates.push("needsReview = ?");
-      args.push(data.needsReview ? 1 : 0);
-    }
-    if (data.position !== undefined) {
-      updates.push("position = ?");
-      args.push(data.position);
-    }
+    const updates: Record<string, unknown> = {};
+    if (data.title !== undefined) updates.title = data.title;
+    if (data.description !== undefined) updates.description = data.description;
+    if (data.status !== undefined) updates.status = data.status;
+    if (data.priority !== undefined) updates.priority = data.priority;
+    if (data.creator !== undefined) updates.creator = data.creator;
+    if (data.needsReview !== undefined) updates.needs_review = data.needsReview;
+    if (data.position !== undefined) updates.position = data.position;
 
-    if (updates.length === 0) return getTaskById(id);
+    if (Object.keys(updates).length === 0) return getTaskById(id);
 
-    updates.push("updatedAt = ?");
-    args.push(now);
-    args.push(id);
+    updates.updated_at = new Date().toISOString();
 
-    await db.execute({
-      sql: `UPDATE Task SET ${updates.join(", ")} WHERE id = ?`,
-      args,
-    });
+    const { data: updated, error } = await supabase
+      .from("tasks")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
 
-    return getTaskById(id);
+    if (error || !updated) return null;
+
+    return rowToTask(updated as TaskRow);
   } catch (error) {
     console.error("Failed to update task:", error);
     return null;
@@ -163,11 +159,9 @@ export async function updateTask(
 
 export async function deleteTask(id: string): Promise<boolean> {
   try {
-    await db.execute({
-      sql: "DELETE FROM Task WHERE id = ?",
-      args: [id],
-    });
-    return true;
+    const supabase = createAdminClient();
+    const { error } = await supabase.from("tasks").delete().eq("id", id);
+    return !error;
   } catch (error) {
     console.error("Failed to delete task:", error);
     return false;
@@ -179,12 +173,20 @@ export async function toggleTaskFlag(id: string): Promise<Task | null> {
     const task = await getTaskById(id);
     if (!task) return null;
 
-    await db.execute({
-      sql: "UPDATE Task SET needsReview = ?, updatedAt = ? WHERE id = ?",
-      args: [task.needsReview ? 0 : 1, new Date().toISOString(), id],
-    });
+    const supabase = createAdminClient();
+    const { data: updated, error } = await supabase
+      .from("tasks")
+      .update({
+        needs_review: !task.needsReview,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .select()
+      .single();
 
-    return getTaskById(id);
+    if (error || !updated) return null;
+
+    return rowToTask(updated as TaskRow);
   } catch (error) {
     console.error("Failed to toggle flag:", error);
     return null;

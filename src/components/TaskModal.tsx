@@ -28,6 +28,7 @@ interface TaskModalProps {
   task: Task | null;
   onTaskUpdated: (task: Task) => void;
   onTaskCreated: (task: Task) => void;
+  defaultCreator?: Creator;
 }
 
 export function TaskModal({
@@ -36,10 +37,11 @@ export function TaskModal({
   task,
   onTaskUpdated,
   onTaskCreated,
+  defaultCreator = "MOBY",
 }: TaskModalProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [priority, setPriority] = useState<Priority>("MEDIUM");
+  const [priority, setPriority] = useState<Priority | "">("");
   const [creator, setCreator] = useState<Creator>("MOBY");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,11 +57,11 @@ export function TaskModal({
     } else {
       setTitle("");
       setDescription("");
-      setPriority("MEDIUM");
-      setCreator("MOBY");
+      setPriority("");
+      setCreator(defaultCreator);
     }
     setError(null);
-  }, [task, open]);
+  }, [task, open, defaultCreator]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,7 +77,7 @@ export function TaskModal({
           ...task,
           title,
           description: description || null,
-          priority,
+          priority: priority || task.priority,
           creator,
           updatedAt: new Date(),
         };
@@ -85,15 +87,16 @@ export function TaskModal({
         const created = await createTask({
           title,
           description: description || undefined,
-          priority,
+          priority: priority || undefined,
           creator,
         });
         onTaskCreated(created);
       }
       onClose();
     } catch (err) {
-      setError("Failed to save task. Please try again.");
-      console.error(err);
+      const message = err instanceof Error ? err.message : "Failed to save task";
+      setError(message);
+      console.error("Task save error:", err);
     } finally {
       setIsSubmitting(false);
     }
@@ -148,7 +151,7 @@ export function TaskModal({
                 disabled={isSubmitting}
               >
                 <SelectTrigger className="bg-zinc-900 border-zinc-800">
-                  <SelectValue />
+                  <SelectValue placeholder="Select priority" />
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-900 border-zinc-800">
                   {PRIORITIES.map((p) => (
