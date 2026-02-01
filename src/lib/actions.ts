@@ -27,6 +27,7 @@ export async function getTasks(): Promise<Task[]> {
       creator: row.creator as Creator,
       needsReview: row.needs_review,
       position: row.position,
+      projectId: row.project_id || null,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
     }));
@@ -83,6 +84,7 @@ export async function createTask(data: {
     creator: newTask.creator as Creator,
     needsReview: newTask.needs_review,
     position: newTask.position,
+    projectId: newTask.project_id || null,
     createdAt: new Date(newTask.created_at),
     updatedAt: new Date(newTask.updated_at),
   };
@@ -139,6 +141,7 @@ export async function updateTask(
     creator: updated.creator as Creator,
     needsReview: updated.needs_review,
     position: updated.position,
+    projectId: updated.project_id || null,
     createdAt: new Date(updated.created_at),
     updatedAt: new Date(updated.updated_at),
   };
@@ -217,6 +220,7 @@ export async function toggleReviewFlag(id: string): Promise<Task | null> {
     creator: updated.creator as Creator,
     needsReview: updated.needs_review,
     position: updated.position,
+    projectId: updated.project_id || null,
     createdAt: new Date(updated.created_at),
     updatedAt: new Date(updated.updated_at),
   };

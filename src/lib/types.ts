@@ -2,6 +2,16 @@ export type Status = "BACKLOG" | "IN_PROGRESS" | "DONE";
 export type Priority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 export type Creator = "MOBY" | "STEPHAN";
 
+export interface Project {
+  id: string;
+  name: string;
+  description: string | null;
+  color: string;
+  position: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -11,6 +21,7 @@ export interface Task {
   creator: Creator;
   needsReview: boolean;
   position: number;
+  projectId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

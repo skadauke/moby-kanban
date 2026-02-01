@@ -11,6 +11,7 @@ interface TaskRow {
   creator: string;
   needs_review: boolean;
   position: number;
+  project_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -25,6 +26,7 @@ function rowToTask(row: TaskRow): Task {
     creator: row.creator as Creator,
     needsReview: row.needs_review,
     position: row.position,
+    projectId: row.project_id,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
   };
@@ -74,6 +76,7 @@ export async function createTask(data: {
   description?: string;
   priority?: Priority;
   creator?: Creator;
+  projectId?: string;
 }): Promise<Task> {
   const supabase = createAdminClient();
 
@@ -97,6 +100,7 @@ export async function createTask(data: {
       creator: data.creator || "MOBY",
       needs_review: false,
       position: maxPos + 1,
+      project_id: data.projectId || null,
     })
     .select()
     .single();
@@ -123,6 +127,7 @@ export async function updateTask(
     creator: Creator;
     needsReview: boolean;
     position: number;
+    projectId: string | null;
   }>
 ): Promise<Task | null> {
   try {
@@ -136,6 +141,7 @@ export async function updateTask(
     if (data.creator !== undefined) updates.creator = data.creator;
     if (data.needsReview !== undefined) updates.needs_review = data.needsReview;
     if (data.position !== undefined) updates.position = data.position;
+    if (data.projectId !== undefined) updates.project_id = data.projectId;
 
     if (Object.keys(updates).length === 0) return getTaskById(id);
 
