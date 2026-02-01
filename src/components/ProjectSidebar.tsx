@@ -25,7 +25,10 @@ const PROJECT_COLORS = [
   "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16",
 ];
 
-// Droppable project item
+/**
+ * Droppable project item for receiving task drops.
+ * Uses button-based reordering to avoid nested DndContext issues.
+ */
 function DroppableProjectItem({
   project,
   isSelected,
@@ -48,6 +51,8 @@ function DroppableProjectItem({
   isLast: boolean;
 }) {
   const { isDraggingTask } = useKanbanDnd();
+  
+  // Droppable for task drops - registers with parent KanbanDndContext
   const { setNodeRef, isOver } = useDroppable({
     id: `project-drop-${project.id}`,
   });
@@ -61,6 +66,29 @@ function DroppableProjectItem({
           : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
       } ${isOver && isDraggingTask ? "ring-2 ring-blue-500 bg-blue-500/10" : ""}`}
     >
+      {/* Reorder buttons - only show when not dragging a task */}
+      {!isDraggingTask && (
+        <div className="flex flex-col -my-1">
+          <button
+            onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
+            disabled={isFirst}
+            className={`p-0.5 ${isFirst ? "text-zinc-700 cursor-not-allowed" : "text-zinc-600 hover:text-zinc-400"}`}
+            title="Move up"
+            aria-label={`Move ${project.name} up`}
+          >
+            <ChevronUp className="h-3 w-3" />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
+            disabled={isLast}
+            className={`p-0.5 ${isLast ? "text-zinc-700 cursor-not-allowed" : "text-zinc-600 hover:text-zinc-400"}`}
+            title="Move down"
+            aria-label={`Move ${project.name} down`}
+          >
+            <ChevronDown className="h-3 w-3" />
+          </button>
+        </div>
+      )}
       <button
         onClick={onSelect}
         className="flex-1 flex items-center gap-3 text-left min-w-0"
@@ -77,28 +105,11 @@ function DroppableProjectItem({
         </div>
       </button>
       <div className="hidden group-hover:flex items-center gap-0.5 flex-shrink-0">
-        {!isFirst && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
-            className="p-1 text-zinc-500 hover:text-zinc-300"
-            title="Move up"
-          >
-            <ChevronUp className="h-3 w-3" />
-          </button>
-        )}
-        {!isLast && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
-            className="p-1 text-zinc-500 hover:text-zinc-300"
-            title="Move down"
-          >
-            <ChevronDown className="h-3 w-3" />
-          </button>
-        )}
         <button
           onClick={(e) => { e.stopPropagation(); onEdit(); }}
           className="p-1 text-zinc-500 hover:text-zinc-300"
           title="Edit"
+          aria-label={`Edit ${project.name}`}
         >
           <Edit2 className="h-3 w-3" />
         </button>
@@ -106,6 +117,7 @@ function DroppableProjectItem({
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
           className="p-1 text-zinc-500 hover:text-red-400"
           title="Delete"
+          aria-label={`Delete ${project.name}`}
         >
           <Trash2 className="h-3 w-3" />
         </button>
@@ -114,7 +126,9 @@ function DroppableProjectItem({
   );
 }
 
-// Droppable "No Project" target
+/**
+ * Droppable "No Project" target for removing project from tasks.
+ */
 function DroppableNoProject({ isSelected, onSelect }: { isSelected: boolean; onSelect: () => void }) {
   const { isDraggingTask } = useKanbanDnd();
   const { setNodeRef, isOver } = useDroppable({
@@ -137,6 +151,11 @@ function DroppableNoProject({ isSelected, onSelect }: { isSelected: boolean; onS
   );
 }
 
+/**
+ * Sidebar component for project navigation and management.
+ * Projects can be reordered via up/down buttons.
+ * Tasks can be dropped on projects to assign them.
+ */
 export function ProjectSidebar({ selectedProjectId, onSelectProject }: ProjectSidebarProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -173,31 +192,36 @@ export function ProjectSidebar({ selectedProjectId, onSelectProject }: ProjectSi
     loadProjects();
   }, []);
 
+  /**
+   * Move a project up or down in the list.
+   */
   const handleMoveProject = async (projectId: string, direction: "up" | "down") => {
-    const index = projects.findIndex(p => p.id === projectId);
-    if (index === -1) return;
+    const currentIndex = projects.findIndex(p => p.id === projectId);
+    if (currentIndex === -1) return;
     
-    const newIndex = direction === "up" ? index - 1 : index + 1;
+    const newIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
     if (newIndex < 0 || newIndex >= projects.length) return;
 
     // Swap positions
-    const newProjects = [...projects];
-    [newProjects[index], newProjects[newIndex]] = [newProjects[newIndex], newProjects[index]];
-    
-    // Update positions
-    const reordered = newProjects.map((p, i) => ({ ...p, position: i }));
-    setProjects(reordered);
+    const reordered = [...projects];
+    [reordered[currentIndex], reordered[newIndex]] = [reordered[newIndex], reordered[currentIndex]];
+    const updated = reordered.map((p, i) => ({ ...p, position: i }));
+    setProjects(updated);
 
-    // Persist
+    // Persist to API
     try {
-      await fetch("/api/projects/reorder", {
+      const res = await fetch("/api/projects/reorder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectIds: reordered.map(p => p.id) }),
+        body: JSON.stringify({ projectIds: updated.map(p => p.id) }),
       });
+      if (!res.ok) {
+        throw new Error("Failed to reorder");
+      }
     } catch (err) {
       console.error("Failed to reorder projects:", err);
-      setProjects(projects); // Revert
+      // Revert on error
+      setProjects(projects);
     }
   };
 
@@ -216,7 +240,7 @@ export function ProjectSidebar({ selectedProjectId, onSelectProject }: ProjectSi
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           name: projectName,
-          description: projectDescription || null,
+          description: projectDescription.trim() || undefined,
           color: projectColor,
           position: editingProject ? undefined : projects.length,
         }),
@@ -425,6 +449,8 @@ export function ProjectSidebar({ selectedProjectId, onSelectProject }: ProjectSi
                   <button
                     key={color}
                     onClick={() => setProjectColor(color)}
+                    aria-label={`Select color ${color}`}
+                    aria-pressed={projectColor === color}
                     className={`w-8 h-8 rounded-full transition-transform ${
                       projectColor === color ? "ring-2 ring-white scale-110" : ""
                     }`}
