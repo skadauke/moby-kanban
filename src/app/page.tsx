@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { Task } from "@/lib/types";
+import { Task, Status } from "@/lib/types";
 import { fetchTasks, updateTask, deleteTask, toggleTaskFlag } from "@/lib/api-client";
 import { Header, FilterType } from "@/components/Header";
 import { Board } from "@/components/Board";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { ProjectSidebar } from "@/components/ProjectSidebar";
+import { KanbanDndProvider } from "@/components/KanbanDndContext";
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -18,16 +19,11 @@ export default function Home() {
   const [filter, setFilter] = useState<FilterType>("all");
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   
-  // Keep a ref to previous tasks for rollback
   const previousTasksRef = useRef<Task[]>([]);
-  // Track request sequence to ignore stale responses
   const loadRequestIdRef = useRef(0);
-  // Track toast timeout for cleanup
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Show temporary toast message
-  const showToast = useCallback((message: string) => {
-    // Clear any existing timeout
+  const showToast = useCallback((message: string, isError = true) => {
     if (toastTimeoutRef.current) {
       clearTimeout(toastTimeoutRef.current);
     }
@@ -35,7 +31,6 @@ export default function Home() {
     toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
   }, []);
 
-  // Cleanup toast timeout on unmount
   useEffect(() => {
     return () => {
       if (toastTimeoutRef.current) {
@@ -44,19 +39,16 @@ export default function Home() {
     };
   }, []);
 
-  // Fetch tasks from API
   const loadTasks = useCallback(async (isRefresh = false) => {
     const requestId = ++loadRequestIdRef.current;
     try {
       if (isRefresh) setIsRefreshing(true);
       setError(null);
       const data = await fetchTasks();
-      // Ignore stale responses
       if (requestId !== loadRequestIdRef.current) return;
       setTasks(data);
       previousTasksRef.current = data;
     } catch (err) {
-      // Ignore errors from stale requests
       if (requestId !== loadRequestIdRef.current) return;
       if (!isRefresh) {
         setError("Failed to load tasks. Please try again.");
@@ -65,7 +57,6 @@ export default function Home() {
       }
       console.error(err);
     } finally {
-      // Only update loading state if this is still the current request
       if (requestId === loadRequestIdRef.current) {
         setIsLoading(false);
         setIsRefreshing(false);
@@ -78,12 +69,10 @@ export default function Home() {
   }, [loadTasks]);
 
   const filteredTasks = useMemo(() => {
-    // First filter by project
     const result = selectedProjectId
       ? tasks.filter((t) => t.projectId === selectedProjectId)
       : tasks;
     
-    // Then apply creator/flag filters
     switch (filter) {
       case "flagged":
         return result.filter((t) => t.needsReview);
@@ -109,23 +98,120 @@ export default function Home() {
     });
   };
 
+  // Handle task status/position change (drag to column or task)
+  const handleTaskStatusChange = async (taskId: string, newStatus: Status, newPosition: number) => {
+    const oldTasks = previousTasksRef.current;
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    // Optimistically update
+    setTasks((prev) => {
+      const withoutTask = prev.filter(t => t.id !== taskId);
+      const columnTasks = withoutTask
+        .filter(t => t.status === newStatus)
+        .sort((a, b) => a.position - b.position);
+      
+      // Insert at position
+      columnTasks.splice(newPosition, 0, { ...task, status: newStatus });
+      
+      // Reindex column
+      const reindexed = columnTasks.map((t, i) => ({ ...t, position: i, updatedAt: new Date() }));
+      
+      // Rebuild task list
+      const otherTasks = withoutTask.filter(t => t.status !== newStatus);
+      const newTasks = [...otherTasks, ...reindexed];
+      previousTasksRef.current = newTasks;
+      return newTasks;
+    });
+
+    try {
+      await updateTask(taskId, { status: newStatus, position: newPosition });
+    } catch (err) {
+      console.error("Failed to update task:", err);
+      setTasks(oldTasks);
+      previousTasksRef.current = oldTasks;
+      showToast(`Failed to move "${task.title}"`);
+    }
+  };
+
+  // Handle task reorder within same column
+  const handleTaskReorder = async (taskId: string, newPosition: number) => {
+    const oldTasks = previousTasksRef.current;
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    // Optimistically update
+    setTasks((prev) => {
+      const columnTasks = prev
+        .filter(t => t.status === task.status)
+        .sort((a, b) => a.position - b.position);
+      
+      const oldIndex = columnTasks.findIndex(t => t.id === taskId);
+      if (oldIndex === -1) return prev;
+      
+      // Remove and reinsert
+      const [removed] = columnTasks.splice(oldIndex, 1);
+      columnTasks.splice(newPosition, 0, removed);
+      
+      // Reindex
+      const reindexed = columnTasks.map((t, i) => ({ ...t, position: i, updatedAt: new Date() }));
+      
+      // Rebuild task list
+      const otherTasks = prev.filter(t => t.status !== task.status);
+      const newTasks = [...otherTasks, ...reindexed];
+      previousTasksRef.current = newTasks;
+      return newTasks;
+    });
+
+    try {
+      await updateTask(taskId, { position: newPosition });
+    } catch (err) {
+      console.error("Failed to reorder task:", err);
+      setTasks(oldTasks);
+      previousTasksRef.current = oldTasks;
+      showToast(`Failed to reorder "${task.title}"`);
+    }
+  };
+
+  // Handle task project change (drag to sidebar project)
+  const handleTaskProjectChange = async (taskId: string, projectId: string | null) => {
+    const oldTasks = previousTasksRef.current;
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    // Optimistically update
+    setTasks((prev) => {
+      const newTasks = prev.map(t => 
+        t.id === taskId ? { ...t, projectId, updatedAt: new Date() } : t
+      );
+      previousTasksRef.current = newTasks;
+      return newTasks;
+    });
+
+    try {
+      await updateTask(taskId, { projectId });
+      showToast(`Moved to ${projectId ? "project" : "No Project"}`);
+    } catch (err) {
+      console.error("Failed to change project:", err);
+      setTasks(oldTasks);
+      previousTasksRef.current = oldTasks;
+      showToast(`Failed to move "${task.title}"`);
+    }
+  };
+
   const handleTasksChange = async (updatedTasks: Task[]) => {
-    // Merge updated tasks into full list (don't replace - handles filtered views)
     const oldTasks = previousTasksRef.current;
     const updatedMap = new Map(updatedTasks.map((t) => [t.id, t]));
     const mergedTasks = oldTasks.map(t => updatedMap.get(t.id) ?? t);
     
-    // Optimistically update UI with merged list
     setTasks(mergedTasks);
     
-    // Find what changed and sync with API
     const oldTaskMap = new Map(oldTasks.map((t) => [t.id, t]));
     const errors: string[] = [];
     
     for (const task of updatedTasks) {
       const oldTask = oldTaskMap.get(task.id);
       if (oldTask) {
-        // Check if status or position changed (drag-drop)
         if (oldTask.status !== task.status || oldTask.position !== task.position) {
           try {
             await updateTask(task.id, {
@@ -141,12 +227,10 @@ export default function Home() {
     }
     
     if (errors.length > 0) {
-      // Rollback and resync on failure
       setTasks(oldTasks);
       showToast(`Failed to move: ${errors.join(", ")}`);
-      await loadTasks(true); // Resync to avoid partial-success divergence
+      await loadTasks(true);
     } else {
-      // Success - update ref with merged list
       previousTasksRef.current = mergedTasks;
     }
   };
@@ -155,16 +239,13 @@ export default function Home() {
     const oldTasks = previousTasksRef.current;
     const taskToDelete = tasks.find(t => t.id === taskId);
     
-    // Optimistically update UI
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
     
     try {
       await deleteTask(taskId);
-      // Success - update ref
       previousTasksRef.current = previousTasksRef.current.filter((t) => t.id !== taskId);
     } catch (err) {
       console.error("Failed to delete task:", err);
-      // Rollback on failure
       setTasks(oldTasks);
       showToast(`Failed to delete "${taskToDelete?.title || "task"}"`);
     }
@@ -174,7 +255,6 @@ export default function Home() {
     const oldTasks = previousTasksRef.current;
     const task = tasks.find(t => t.id === taskId);
     
-    // Optimistically update UI
     setTasks((prev) =>
       prev.map((t) =>
         t.id === taskId ? { ...t, needsReview: !t.needsReview, updatedAt: new Date() } : t
@@ -183,7 +263,6 @@ export default function Home() {
     
     try {
       const updated = await toggleTaskFlag(taskId);
-      // Success - update with server response and ref
       setTasks((prev) => {
         const newTasks = prev.map((t) => (t.id === taskId ? updated : t));
         previousTasksRef.current = newTasks;
@@ -191,7 +270,6 @@ export default function Home() {
       });
     } catch (err) {
       console.error("Failed to toggle flag:", err);
-      // Rollback on failure
       setTasks(oldTasks);
       showToast(`Failed to ${task?.needsReview ? "clear" : "set"} flag`);
     }
@@ -200,7 +278,6 @@ export default function Home() {
   const handleTaskUpdated = async (task: Task) => {
     const oldTasks = previousTasksRef.current;
     
-    // Optimistically update UI
     setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)));
     
     try {
@@ -212,7 +289,6 @@ export default function Home() {
         needsReview: task.needsReview,
         projectId: task.projectId,
       });
-      // Success - update with server response and ref
       setTasks((prev) => {
         const newTasks = prev.map((t) => (t.id === task.id ? updated : t));
         previousTasksRef.current = newTasks;
@@ -220,7 +296,6 @@ export default function Home() {
       });
     } catch (err) {
       console.error("Failed to update task:", err);
-      // Rollback on failure
       setTasks(oldTasks);
       showToast(`Failed to update "${task.title}"`);
     }
@@ -248,38 +323,44 @@ export default function Home() {
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-zinc-900 flex">
-        <ProjectSidebar
-          selectedProjectId={selectedProjectId}
-          onSelectProject={setSelectedProjectId}
-        />
-        <main className="flex-1 flex flex-col min-h-screen">
-          <Header
-            onTaskCreated={handleTaskCreated}
-            filter={filter}
-            onFilterChange={setFilter}
-            flaggedCount={flaggedCount}
-            onRefresh={() => loadTasks(true)}
-            isRefreshing={isRefreshing}
+      <KanbanDndProvider
+        tasks={tasks}
+        onTaskStatusChange={handleTaskStatusChange}
+        onTaskProjectChange={handleTaskProjectChange}
+        onTaskReorder={handleTaskReorder}
+      >
+        <div className="min-h-screen bg-zinc-900 flex">
+          <ProjectSidebar
             selectedProjectId={selectedProjectId}
+            onSelectProject={setSelectedProjectId}
           />
-          <Board
-            initialTasks={filteredTasks}
-            onTasksChange={handleTasksChange}
-            onDeleteTask={handleDeleteTask}
-            onToggleFlag={handleToggleFlag}
-            onTaskUpdated={handleTaskUpdated}
-            key={`${filter}-${selectedProjectId}-${tasks.length}`}
-          />
-        </main>
-        
-        {/* Toast notification */}
-        {toast && (
-          <div className="fixed bottom-4 right-4 bg-red-600 text-white px-4 py-2 rounded-md shadow-lg animate-in fade-in slide-in-from-bottom-2">
-            {toast}
-          </div>
-        )}
-      </div>
+          <main className="flex-1 flex flex-col min-h-screen">
+            <Header
+              onTaskCreated={handleTaskCreated}
+              filter={filter}
+              onFilterChange={setFilter}
+              flaggedCount={flaggedCount}
+              onRefresh={() => loadTasks(true)}
+              isRefreshing={isRefreshing}
+              selectedProjectId={selectedProjectId}
+            />
+            <Board
+              initialTasks={filteredTasks}
+              onTasksChange={handleTasksChange}
+              onDeleteTask={handleDeleteTask}
+              onToggleFlag={handleToggleFlag}
+              onTaskUpdated={handleTaskUpdated}
+              key={`${filter}-${selectedProjectId}-${tasks.length}`}
+            />
+          </main>
+          
+          {toast && (
+            <div className="fixed bottom-4 right-4 bg-zinc-800 text-white px-4 py-2 rounded-md shadow-lg animate-in fade-in slide-in-from-bottom-2 border border-zinc-700">
+              {toast}
+            </div>
+          )}
+        </div>
+      </KanbanDndProvider>
     </ErrorBoundary>
   );
 }
