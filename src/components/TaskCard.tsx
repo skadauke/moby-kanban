@@ -2,7 +2,7 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -64,58 +64,63 @@ export function TaskCard({ task, onEdit, onDelete, onToggleFlag }: TaskCardProps
         task.needsReview ? "ring-2 ring-amber-500/50" : ""
       }`}
     >
-      <CardHeader className="p-3 pb-1 flex flex-row items-start justify-between space-y-0">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">{creator?.emoji}</span>
-          {task.needsReview && (
-            <Flag className="h-4 w-4 text-amber-500 fill-amber-500" />
-          )}
+      <CardContent className="p-2.5">
+        {/* Top row: avatar, flag, menu */}
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm">{creator?.emoji}</span>
+            {task.needsReview && (
+              <Flag className="h-3 w-3 text-amber-500 fill-amber-500" />
+            )}
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 -mr-1"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800">
+              <DropdownMenuItem onClick={() => onEdit(task)}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onToggleFlag(task.id)}>
+                <Flag className="mr-2 h-4 w-4" />
+                {task.needsReview ? "Clear Flag" : "Flag for Review"}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={handleDelete}
+                className="text-red-500 focus:text-red-500"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800">
-            <DropdownMenuItem onClick={() => onEdit(task)}>
-              <Pencil className="mr-2 h-4 w-4" />
-              Edit
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onToggleFlag(task.id)}>
-              <Flag className="mr-2 h-4 w-4" />
-              {task.needsReview ? "Clear Flag" : "Flag for Review"}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={handleDelete}
-              className="text-red-500 focus:text-red-500"
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </CardHeader>
-      <CardContent className="p-3 pt-1">
-        <h3 className="font-medium text-sm mb-1">{task.title}</h3>
+
+        {/* Title */}
+        <h3 className="font-medium text-sm leading-snug mb-1">{task.title}</h3>
+        
+        {/* Description (if any) */}
         {task.description && (
-          <p className="text-xs text-zinc-400 line-clamp-2 mb-2">
+          <p className="text-xs text-zinc-400 line-clamp-2 mb-1.5">
             {task.description}
           </p>
         )}
-        <div className="flex items-center gap-2">
-          <Badge
-            variant="secondary"
-            className={`${priority?.color} text-white text-xs px-2 py-0`}
-          >
-            {priority?.label}
-          </Badge>
-        </div>
+        
+        {/* Priority badge */}
+        <Badge
+          variant="secondary"
+          className={`${priority?.color} text-white text-[10px] px-1.5 py-0 h-4`}
+        >
+          {priority?.label}
+        </Badge>
       </CardContent>
     </Card>
   );

@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TaskModal } from "./TaskModal";
+import { UserMenu } from "./UserMenu";
 import { Task, Creator } from "@/lib/types";
 import { Plus, Flag, X, RefreshCw } from "lucide-react";
 
@@ -43,96 +44,98 @@ export function Header({
   return (
     <>
       <header className="bg-zinc-950 border-b border-zinc-800 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <span className="text-3xl">🐋</span>
-              <div>
-                <h1 className="text-xl font-bold text-zinc-100">Moby Kanban</h1>
-                <p className="text-xs text-zinc-500">AI-Human Project Tracker</p>
-              </div>
+        <div className="px-4 py-3">
+          <div className="flex items-center justify-between gap-4">
+            {/* Left: Logo & Title */}
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">🐋</span>
+              <h1 className="text-lg font-bold text-zinc-100">Moby Kanban</h1>
             </div>
+
+            {/* Center: Filters */}
+            <div className="flex items-center gap-1.5 flex-1 justify-center">
+              <Button
+                variant={filter === "all" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => onFilterChange("all")}
+                className={`h-7 px-2 ${filter === "all" ? "bg-zinc-700" : "text-zinc-400"}`}
+              >
+                All
+              </Button>
+              <Button
+                variant={filter === "flagged" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => onFilterChange("flagged")}
+                className={`h-7 px-2 ${
+                  filter === "flagged"
+                    ? "bg-amber-600 hover:bg-amber-700"
+                    : "text-zinc-400"
+                }`}
+              >
+                <Flag className="h-3 w-3 mr-1" />
+                Review
+                {flaggedCount > 0 && (
+                  <Badge
+                    variant="secondary"
+                    className="ml-1 bg-amber-500/20 text-amber-300 text-xs px-1.5 h-4"
+                  >
+                    {flaggedCount}
+                  </Badge>
+                )}
+              </Button>
+              <Button
+                variant={filter === "moby" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => onFilterChange("moby")}
+                className={`h-7 px-2 ${filter === "moby" ? "bg-zinc-700" : "text-zinc-400"}`}
+              >
+                🐋
+              </Button>
+              <Button
+                variant={filter === "stephan" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => onFilterChange("stephan")}
+                className={`h-7 px-2 ${filter === "stephan" ? "bg-zinc-700" : "text-zinc-400"}`}
+              >
+                👤
+              </Button>
+              {filter !== "all" && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onFilterChange("all")}
+                  className="h-7 w-7 p-0 text-zinc-500 hover:text-zinc-100"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
+
+            {/* Right: Actions & User */}
             <div className="flex items-center gap-2">
               {onRefresh && (
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="icon"
                   onClick={onRefresh}
                   disabled={isRefreshing}
-                  className="border-zinc-700"
+                  className="h-8 w-8 text-zinc-400"
                 >
                   <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
                 </Button>
               )}
               <Button
                 onClick={() => setIsModalOpen(true)}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                New Task
-              </Button>
-            </div>
-          </div>
-
-          {/* Filter Bar */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-zinc-500 mr-1">Filter:</span>
-            <Button
-              variant={filter === "all" ? "default" : "outline"}
-              size="sm"
-              onClick={() => onFilterChange("all")}
-              className={filter === "all" ? "bg-zinc-700" : "border-zinc-700"}
-            >
-              All
-            </Button>
-            <Button
-              variant={filter === "flagged" ? "default" : "outline"}
-              size="sm"
-              onClick={() => onFilterChange("flagged")}
-              className={
-                filter === "flagged"
-                  ? "bg-amber-600 hover:bg-amber-700"
-                  : "border-zinc-700"
-              }
-            >
-              <Flag className="h-3 w-3 mr-1" />
-              Needs Review
-              {flaggedCount > 0 && (
-                <Badge
-                  variant="secondary"
-                  className="ml-1 bg-amber-500/20 text-amber-300 text-xs px-1.5"
-                >
-                  {flaggedCount}
-                </Badge>
-              )}
-            </Button>
-            <Button
-              variant={filter === "moby" ? "default" : "outline"}
-              size="sm"
-              onClick={() => onFilterChange("moby")}
-              className={filter === "moby" ? "bg-zinc-700" : "border-zinc-700"}
-            >
-              🐋 Moby
-            </Button>
-            <Button
-              variant={filter === "stephan" ? "default" : "outline"}
-              size="sm"
-              onClick={() => onFilterChange("stephan")}
-              className={filter === "stephan" ? "bg-zinc-700" : "border-zinc-700"}
-            >
-              👤 Stephan
-            </Button>
-            {filter !== "all" && (
-              <Button
-                variant="ghost"
                 size="sm"
-                onClick={() => onFilterChange("all")}
-                className="text-zinc-400 hover:text-zinc-100"
+                className="h-8 bg-blue-600 hover:bg-blue-700"
               >
-                <X className="h-3 w-3 mr-1" />
-                Clear
+                <Plus className="h-4 w-4 mr-1" />
+                New
               </Button>
-            )}
+              {session?.user && (
+                <UserMenu user={session.user} />
+              )}
+            </div>
           </div>
         </div>
       </header>
