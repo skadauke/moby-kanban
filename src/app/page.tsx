@@ -112,6 +112,7 @@ export default function Home() {
         priority: task.priority,
         creator: task.creator,
         needsReview: task.needsReview,
+        projectId: task.projectId,
       });
       setTasks((prev) => prev.map((t) => (t.id === task.id ? updated : t)));
     } catch (err) {

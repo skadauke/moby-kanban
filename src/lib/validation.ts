@@ -36,6 +36,7 @@ export const updateTaskSchema = z.object({
   creator: z.enum(["MOBY", "STEPHAN"]).optional(),
   needsReview: z.boolean().optional(),
   position: z.number().int().min(0).optional(),
+  projectId: z.string().uuid().nullable().optional(),
 });
 
 // Helper to format Zod errors

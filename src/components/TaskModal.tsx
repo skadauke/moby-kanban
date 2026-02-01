@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Task, Priority, Creator, PRIORITIES, CREATORS } from "@/lib/types";
+import { Task, Project, Priority, Creator, PRIORITIES, CREATORS } from "@/lib/types";
 import { createTask } from "@/lib/api-client";
 import { Label } from "@/components/ui/label";
 
@@ -45,10 +45,22 @@ export function TaskModal({
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<Priority | "">("");
   const [creator, setCreator] = useState<Creator>("MOBY");
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isEditing = !!task;
+
+  // Fetch projects when modal opens
+  useEffect(() => {
+    if (open) {
+      fetch("/api/projects")
+        .then(res => res.ok ? res.json() : [])
+        .then(data => setProjects(data))
+        .catch(() => setProjects([]));
+    }
+  }, [open]);
 
   useEffect(() => {
     if (task) {
@@ -56,14 +68,16 @@ export function TaskModal({
       setDescription(task.description || "");
       setPriority(task.priority);
       setCreator(task.creator);
+      setProjectId(task.projectId);
     } else {
       setTitle("");
       setDescription("");
       setPriority("");
       setCreator(defaultCreator);
+      setProjectId(defaultProjectId);
     }
     setError(null);
-  }, [task, open, defaultCreator]);
+  }, [task, open, defaultCreator, defaultProjectId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,6 +95,7 @@ export function TaskModal({
           description: description || null,
           priority: priority || task.priority,
           creator,
+          projectId,
           updatedAt: new Date(),
         };
         onTaskUpdated(updated);
@@ -91,7 +106,7 @@ export function TaskModal({
           description: description || undefined,
           priority: priority || undefined,
           creator,
-          projectId: defaultProjectId || undefined,
+          projectId: projectId || undefined,
         });
         onTaskCreated(created);
       }
@@ -190,6 +205,36 @@ export function TaskModal({
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* Project selector */}
+          <div className="space-y-2">
+            <Label>Project</Label>
+            <Select 
+              value={projectId || "none"} 
+              onValueChange={(v) => setProjectId(v === "none" ? null : v)}
+              disabled={isSubmitting}
+            >
+              <SelectTrigger className="bg-zinc-900 border-zinc-800">
+                <SelectValue placeholder="No project" />
+              </SelectTrigger>
+              <SelectContent className="bg-zinc-900 border-zinc-800">
+                <SelectItem value="none">
+                  <span className="text-zinc-400">No project</span>
+                </SelectItem>
+                {projects.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    <span className="flex items-center gap-2">
+                      <span 
+                        className="w-2 h-2 rounded-full" 
+                        style={{ backgroundColor: p.color }}
+                      />
+                      {p.name}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <DialogFooter>

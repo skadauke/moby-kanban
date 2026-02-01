@@ -47,6 +47,7 @@ export async function updateTask(
     creator: Creator;
     needsReview: boolean;
     position: number;
+    projectId: string | null;
   }>
 ): Promise<Task> {
   const res = await fetch(`${API_BASE}/${id}`, {
