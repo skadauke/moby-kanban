@@ -7,22 +7,23 @@ interface RouteParams {
 
 // POST /api/tasks/:id/flag - Toggle review flag
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  try {
-    const { id } = await params;
-    const task = await toggleTaskFlag(id);
-    
-    if (!task) {
-      return NextResponse.json(
-        { error: "Task not found" },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json(task);
-  } catch {
+  const { id } = await params;
+  
+  if (!id || typeof id !== "string") {
     return NextResponse.json(
-      { error: "Failed to toggle flag" },
-      { status: 500 }
+      { error: "Invalid task ID" },
+      { status: 400 }
     );
   }
+
+  const result = await toggleTaskFlag(id);
+  
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: result.error.message },
+      { status: result.error.httpStatus }
+    );
+  }
+
+  return NextResponse.json(result.data);
 }

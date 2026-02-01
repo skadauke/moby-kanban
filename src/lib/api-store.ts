@@ -1,5 +1,6 @@
 import { Task, Status, Priority, Creator } from "./types";
 import { createAdminClient } from "./supabase/server";
+import { Result, ok, err, DbError } from "./result";
 
 // Database row type (matches Supabase table schema)
 interface TaskRow {
@@ -32,7 +33,7 @@ function rowToTask(row: TaskRow): Task {
   };
 }
 
-export async function getAllTasks(): Promise<Task[]> {
+export async function getAllTasks(): Promise<Result<Task[], DbError>> {
   try {
     const supabase = createAdminClient();
     const { data, error } = await supabase
@@ -43,17 +44,17 @@ export async function getAllTasks(): Promise<Task[]> {
 
     if (error) {
       console.error("Failed to get tasks:", error);
-      return [];
+      return err(new DbError(error.message, "CONNECTION"));
     }
 
-    return (data || []).map((row: TaskRow) => rowToTask(row));
+    return ok((data || []).map((row: TaskRow) => rowToTask(row)));
   } catch (error) {
     console.error("Failed to get tasks:", error);
-    return [];
+    return err(new DbError(String(error), "UNKNOWN"));
   }
 }
 
-export async function getTaskById(id: string): Promise<Task | null> {
+export async function getTaskById(id: string): Promise<Result<Task, DbError>> {
   try {
     const supabase = createAdminClient();
     const { data, error } = await supabase
@@ -62,12 +63,22 @@ export async function getTaskById(id: string): Promise<Task | null> {
       .eq("id", id)
       .single();
 
-    if (error || !data) return null;
+    if (error) {
+      if (error.code === "PGRST116") {
+        return err(new DbError("Task not found", "NOT_FOUND"));
+      }
+      console.error("Failed to get task:", error);
+      return err(new DbError(error.message, "CONNECTION"));
+    }
 
-    return rowToTask(data as TaskRow);
+    if (!data) {
+      return err(new DbError("Task not found", "NOT_FOUND"));
+    }
+
+    return ok(rowToTask(data as TaskRow));
   } catch (error) {
     console.error("Failed to get task:", error);
-    return null;
+    return err(new DbError(String(error), "UNKNOWN"));
   }
 }
 
@@ -77,44 +88,57 @@ export async function createTask(data: {
   priority?: Priority;
   creator?: Creator;
   projectId?: string;
-}): Promise<Task> {
-  const supabase = createAdminClient();
+}): Promise<Result<Task, DbError>> {
+  try {
+    const supabase = createAdminClient();
 
-  // Get max position
-  const { data: maxPosData } = await supabase
-    .from("tasks")
-    .select("position")
-    .eq("status", "BACKLOG")
-    .order("position", { ascending: false })
-    .limit(1);
+    // Get max position
+    const { data: maxPosData, error: posError } = await supabase
+      .from("tasks")
+      .select("position")
+      .eq("status", "BACKLOG")
+      .order("position", { ascending: false })
+      .limit(1);
 
-  const maxPos = maxPosData?.[0]?.position ?? -1;
+    if (posError) {
+      console.error("Failed to get max position:", posError);
+      return err(new DbError(posError.message, "CONNECTION"));
+    }
 
-  const { data: newTask, error } = await supabase
-    .from("tasks")
-    .insert({
-      title: data.title,
-      description: data.description || null,
-      status: "BACKLOG",
-      priority: data.priority || "MEDIUM",
-      creator: data.creator || "MOBY",
-      needs_review: false,
-      position: maxPos + 1,
-      project_id: data.projectId || null,
-    })
-    .select()
-    .single();
+    const maxPos = maxPosData?.[0]?.position ?? -1;
 
-  if (error) {
-    const errMsg = error.message || "Unknown database error";
-    const errCode = error.code || "UNKNOWN";
-    throw new Error(`Database error (${errCode}): ${errMsg}`);
+    const { data: newTask, error } = await supabase
+      .from("tasks")
+      .insert({
+        title: data.title,
+        description: data.description || null,
+        status: "BACKLOG",
+        priority: data.priority || "MEDIUM",
+        creator: data.creator || "MOBY",
+        needs_review: false,
+        position: maxPos + 1,
+        project_id: data.projectId || null,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Failed to create task:", error);
+      if (error.code === "23503") {
+        return err(new DbError("Invalid project ID", "CONSTRAINT"));
+      }
+      return err(new DbError(error.message, "CONNECTION"));
+    }
+
+    if (!newTask) {
+      return err(new DbError("Task created but no data returned", "UNKNOWN"));
+    }
+
+    return ok(rowToTask(newTask as TaskRow));
+  } catch (error) {
+    console.error("Failed to create task:", error);
+    return err(new DbError(String(error), "UNKNOWN"));
   }
-  if (!newTask) {
-    throw new Error("Task created but no data returned");
-  }
-
-  return rowToTask(newTask as TaskRow);
 }
 
 export async function updateTask(
@@ -129,7 +153,7 @@ export async function updateTask(
     position: number;
     projectId: string | null;
   }>
-): Promise<Task | null> {
+): Promise<Result<Task, DbError>> {
   try {
     const supabase = createAdminClient();
 
@@ -143,7 +167,9 @@ export async function updateTask(
     if (data.position !== undefined) updates.position = data.position;
     if (data.projectId !== undefined) updates.project_id = data.projectId;
 
-    if (Object.keys(updates).length === 0) return getTaskById(id);
+    if (Object.keys(updates).length === 0) {
+      return getTaskById(id);
+    }
 
     updates.updated_at = new Date().toISOString();
 
@@ -154,47 +180,87 @@ export async function updateTask(
       .select()
       .single();
 
-    if (error || !updated) return null;
+    if (error) {
+      if (error.code === "PGRST116") {
+        return err(new DbError("Task not found", "NOT_FOUND"));
+      }
+      if (error.code === "23503") {
+        return err(new DbError("Invalid project ID", "CONSTRAINT"));
+      }
+      console.error("Failed to update task:", error);
+      return err(new DbError(error.message, "CONNECTION"));
+    }
 
-    return rowToTask(updated as TaskRow);
+    if (!updated) {
+      return err(new DbError("Task not found", "NOT_FOUND"));
+    }
+
+    return ok(rowToTask(updated as TaskRow));
   } catch (error) {
     console.error("Failed to update task:", error);
-    return null;
+    return err(new DbError(String(error), "UNKNOWN"));
   }
 }
 
-export async function deleteTask(id: string): Promise<boolean> {
+export async function deleteTask(id: string): Promise<Result<void, DbError>> {
   try {
     const supabase = createAdminClient();
+    
+    // First check if task exists
+    const { data: existing } = await supabase
+      .from("tasks")
+      .select("id")
+      .eq("id", id)
+      .single();
+    
+    if (!existing) {
+      return err(new DbError("Task not found", "NOT_FOUND"));
+    }
+
     const { error } = await supabase.from("tasks").delete().eq("id", id);
-    return !error;
+    
+    if (error) {
+      console.error("Failed to delete task:", error);
+      return err(new DbError(error.message, "CONNECTION"));
+    }
+
+    return ok(undefined);
   } catch (error) {
     console.error("Failed to delete task:", error);
-    return false;
+    return err(new DbError(String(error), "UNKNOWN"));
   }
 }
 
-export async function toggleTaskFlag(id: string): Promise<Task | null> {
-  try {
-    const task = await getTaskById(id);
-    if (!task) return null;
+export async function toggleTaskFlag(id: string): Promise<Result<Task, DbError>> {
+  const taskResult = await getTaskById(id);
+  if (!taskResult.ok) {
+    return taskResult;
+  }
 
+  try {
     const supabase = createAdminClient();
     const { data: updated, error } = await supabase
       .from("tasks")
       .update({
-        needs_review: !task.needsReview,
+        needs_review: !taskResult.data.needsReview,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
       .select()
       .single();
 
-    if (error || !updated) return null;
+    if (error) {
+      console.error("Failed to toggle flag:", error);
+      return err(new DbError(error.message, "CONNECTION"));
+    }
 
-    return rowToTask(updated as TaskRow);
+    if (!updated) {
+      return err(new DbError("Task not found", "NOT_FOUND"));
+    }
+
+    return ok(rowToTask(updated as TaskRow));
   } catch (error) {
     console.error("Failed to toggle flag:", error);
-    return null;
+    return err(new DbError(String(error), "UNKNOWN"));
   }
 }
