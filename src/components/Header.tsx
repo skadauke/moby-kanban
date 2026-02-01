@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TaskModal } from "./TaskModal";
 import { Task } from "@/lib/types";
-import { Plus, Flag, X } from "lucide-react";
+import { Plus, Flag, X, RefreshCw } from "lucide-react";
 
 export type FilterType = "all" | "flagged" | "moby" | "stephan";
 
@@ -14,9 +14,18 @@ interface HeaderProps {
   filter: FilterType;
   onFilterChange: (filter: FilterType) => void;
   flaggedCount: number;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }
 
-export function Header({ onTaskCreated, filter, onFilterChange, flaggedCount }: HeaderProps) {
+export function Header({
+  onTaskCreated,
+  filter,
+  onFilterChange,
+  flaggedCount,
+  onRefresh,
+  isRefreshing,
+}: HeaderProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   return (
@@ -31,15 +40,28 @@ export function Header({ onTaskCreated, filter, onFilterChange, flaggedCount }: 
                 <p className="text-xs text-zinc-500">AI-Human Project Tracker</p>
               </div>
             </div>
-            <Button
-              onClick={() => setIsModalOpen(true)}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              New Task
-            </Button>
+            <div className="flex items-center gap-2">
+              {onRefresh && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={onRefresh}
+                  disabled={isRefreshing}
+                  className="border-zinc-700"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+                </Button>
+              )}
+              <Button
+                onClick={() => setIsModalOpen(true)}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                New Task
+              </Button>
+            </div>
           </div>
-          
+
           {/* Filter Bar */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-zinc-500 mr-1">Filter:</span>
@@ -55,12 +77,19 @@ export function Header({ onTaskCreated, filter, onFilterChange, flaggedCount }: 
               variant={filter === "flagged" ? "default" : "outline"}
               size="sm"
               onClick={() => onFilterChange("flagged")}
-              className={filter === "flagged" ? "bg-amber-600 hover:bg-amber-700" : "border-zinc-700"}
+              className={
+                filter === "flagged"
+                  ? "bg-amber-600 hover:bg-amber-700"
+                  : "border-zinc-700"
+              }
             >
               <Flag className="h-3 w-3 mr-1" />
               Needs Review
               {flaggedCount > 0 && (
-                <Badge variant="secondary" className="ml-1 bg-amber-500/20 text-amber-300 text-xs px-1.5">
+                <Badge
+                  variant="secondary"
+                  className="ml-1 bg-amber-500/20 text-amber-300 text-xs px-1.5"
+                >
                   {flaggedCount}
                 </Badge>
               )}

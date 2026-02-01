@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Task, Priority, Creator, PRIORITIES, CREATORS } from "@/lib/types";
-import { createTaskLocal } from "@/lib/store";
+import { createTask } from "@/lib/api-client";
 import { Label } from "@/components/ui/label";
 
 interface TaskModalProps {
@@ -41,6 +41,8 @@ export function TaskModal({
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<Priority>("MEDIUM");
   const [creator, setCreator] = useState<Creator>("MOBY");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const isEditing = !!task;
 
@@ -56,32 +58,45 @@ export function TaskModal({
       setPriority("MEDIUM");
       setCreator("MOBY");
     }
+    setError(null);
   }, [task, open]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
 
-    if (isEditing && task) {
-      const updated: Task = {
-        ...task,
-        title,
-        description: description || null,
-        priority,
-        creator,
-        updatedAt: new Date(),
-      };
-      onTaskUpdated(updated);
-    } else {
-      const created = createTaskLocal({
-        title,
-        description: description || undefined,
-        priority,
-        creator,
-      });
-      onTaskCreated(created);
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      if (isEditing && task) {
+        // For editing, we pass the updated task back
+        const updated: Task = {
+          ...task,
+          title,
+          description: description || null,
+          priority,
+          creator,
+          updatedAt: new Date(),
+        };
+        onTaskUpdated(updated);
+      } else {
+        // For creating, call the API
+        const created = await createTask({
+          title,
+          description: description || undefined,
+          priority,
+          creator,
+        });
+        onTaskCreated(created);
+      }
+      onClose();
+    } catch (err) {
+      setError("Failed to save task. Please try again.");
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
     }
-    onClose();
   };
 
   return (
@@ -93,6 +108,12 @@ export function TaskModal({
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="text-red-400 text-sm bg-red-950/50 px-3 py-2 rounded">
+              {error}
+            </div>
+          )}
+          
           <div className="space-y-2">
             <Label htmlFor="title">Title</Label>
             <Input
@@ -102,6 +123,7 @@ export function TaskModal({
               placeholder="Task title..."
               className="bg-zinc-900 border-zinc-800"
               autoFocus
+              disabled={isSubmitting}
             />
           </div>
 
@@ -113,13 +135,18 @@ export function TaskModal({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Optional description..."
               className="bg-zinc-900 border-zinc-800 min-h-[100px]"
+              disabled={isSubmitting}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Priority</Label>
-              <Select value={priority} onValueChange={(v) => setPriority(v as Priority)}>
+              <Select 
+                value={priority} 
+                onValueChange={(v) => setPriority(v as Priority)}
+                disabled={isSubmitting}
+              >
                 <SelectTrigger className="bg-zinc-900 border-zinc-800">
                   <SelectValue />
                 </SelectTrigger>
@@ -127,9 +154,7 @@ export function TaskModal({
                   {PRIORITIES.map((p) => (
                     <SelectItem key={p.value} value={p.value}>
                       <span className="flex items-center gap-2">
-                        <span
-                          className={`w-2 h-2 rounded-full ${p.color}`}
-                        />
+                        <span className={`w-2 h-2 rounded-full ${p.color}`} />
                         {p.label}
                       </span>
                     </SelectItem>
@@ -140,7 +165,11 @@ export function TaskModal({
 
             <div className="space-y-2">
               <Label>Creator</Label>
-              <Select value={creator} onValueChange={(v) => setCreator(v as Creator)}>
+              <Select 
+                value={creator} 
+                onValueChange={(v) => setCreator(v as Creator)}
+                disabled={isSubmitting}
+              >
                 <SelectTrigger className="bg-zinc-900 border-zinc-800">
                   <SelectValue />
                 </SelectTrigger>
@@ -163,15 +192,16 @@ export function TaskModal({
               variant="outline"
               onClick={onClose}
               className="border-zinc-700"
+              disabled={isSubmitting}
             >
               Cancel
             </Button>
             <Button
               type="submit"
-              disabled={!title.trim()}
+              disabled={!title.trim() || isSubmitting}
               className="bg-blue-600 hover:bg-blue-700"
             >
-              {isEditing ? "Update" : "Create"}
+              {isSubmitting ? "Saving..." : isEditing ? "Update" : "Create"}
             </Button>
           </DialogFooter>
         </form>

@@ -1,26 +1,34 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Task } from "@/lib/types";
-import { getStoredTasks, saveTasks } from "@/lib/store";
+import { fetchTasks, updateTask, deleteTask, toggleTaskFlag } from "@/lib/api-client";
 import { Header, FilterType } from "@/components/Header";
 import { Board } from "@/components/Board";
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
 
-  useEffect(() => {
-    setTasks(getStoredTasks());
-    setIsLoaded(true);
+  // Fetch tasks from API
+  const loadTasks = useCallback(async () => {
+    try {
+      setError(null);
+      const data = await fetchTasks();
+      setTasks(data);
+    } catch (err) {
+      setError("Failed to load tasks. Please try again.");
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    if (isLoaded) {
-      saveTasks(tasks);
-    }
-  }, [tasks, isLoaded]);
+    loadTasks();
+  }, [loadTasks]);
 
   const filteredTasks = useMemo(() => {
     switch (filter) {
@@ -35,8 +43,8 @@ export default function Home() {
     }
   }, [tasks, filter]);
 
-  const flaggedCount = useMemo(() => 
-    tasks.filter((t) => t.needsReview).length, 
+  const flaggedCount = useMemo(
+    () => tasks.filter((t) => t.needsReview).length,
     [tasks]
   );
 
@@ -44,42 +52,105 @@ export default function Home() {
     setTasks((prev) => [...prev, task]);
   };
 
-  if (!isLoaded) {
+  const handleTasksChange = async (updatedTasks: Task[]) => {
+    // Find what changed and sync with API
+    const oldTaskMap = new Map(tasks.map((t) => [t.id, t]));
+    
+    for (const task of updatedTasks) {
+      const oldTask = oldTaskMap.get(task.id);
+      if (oldTask) {
+        // Check if status or position changed (drag-drop)
+        if (oldTask.status !== task.status || oldTask.position !== task.position) {
+          try {
+            await updateTask(task.id, {
+              status: task.status,
+              position: task.position,
+            });
+          } catch (err) {
+            console.error("Failed to update task:", err);
+          }
+        }
+      }
+    }
+    
+    setTasks(updatedTasks);
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      await deleteTask(taskId);
+      setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    } catch (err) {
+      console.error("Failed to delete task:", err);
+    }
+  };
+
+  const handleToggleFlag = async (taskId: string) => {
+    try {
+      const updated = await toggleTaskFlag(taskId);
+      setTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)));
+    } catch (err) {
+      console.error("Failed to toggle flag:", err);
+    }
+  };
+
+  const handleTaskUpdated = async (task: Task) => {
+    try {
+      const updated = await updateTask(task.id, {
+        title: task.title,
+        description: task.description,
+        priority: task.priority,
+        creator: task.creator,
+        needsReview: task.needsReview,
+      });
+      setTasks((prev) => prev.map((t) => (t.id === task.id ? updated : t)));
+    } catch (err) {
+      console.error("Failed to update task:", err);
+    }
+  };
+
+  if (isLoading) {
     return (
       <main className="min-h-screen bg-zinc-900 flex items-center justify-center">
-        <div className="text-zinc-400">Loading...</div>
+        <div className="flex items-center gap-3 text-zinc-400">
+          <div className="animate-spin h-5 w-5 border-2 border-zinc-600 border-t-zinc-300 rounded-full" />
+          Loading tasks...
+        </div>
+      </main>
+    );
+  }
+
+  if (error) {
+    return (
+      <main className="min-h-screen bg-zinc-900 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-400 mb-4">{error}</p>
+          <button
+            onClick={loadTasks}
+            className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-md text-zinc-100"
+          >
+            Retry
+          </button>
+        </div>
       </main>
     );
   }
 
   return (
     <main className="min-h-screen bg-zinc-900">
-      <Header 
+      <Header
         onTaskCreated={handleTaskCreated}
         filter={filter}
         onFilterChange={setFilter}
         flaggedCount={flaggedCount}
       />
-      <Board 
-        initialTasks={filteredTasks} 
-        onTasksChange={(newTasks) => {
-          // Merge filtered changes back into full task list
-          const taskMap = new Map(tasks.map(t => [t.id, t]));
-          newTasks.forEach(t => taskMap.set(t.id, t));
-          
-          // Remove deleted tasks
-          const newIds = new Set(newTasks.map(t => t.id));
-          const filtered = filter !== "all";
-          
-          if (filtered) {
-            // In filtered view, only update tasks that match filter
-            setTasks(Array.from(taskMap.values()));
-          } else {
-            // In "all" view, newTasks is the complete set
-            setTasks(newTasks);
-          }
-        }}
-        key={`${filter}-${filteredTasks.length}`}
+      <Board
+        initialTasks={filteredTasks}
+        onTasksChange={handleTasksChange}
+        onDeleteTask={handleDeleteTask}
+        onToggleFlag={handleToggleFlag}
+        onTaskUpdated={handleTaskUpdated}
+        key={`${filter}-${tasks.length}`}
       />
     </main>
   );
