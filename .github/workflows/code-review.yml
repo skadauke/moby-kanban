@@ -2,12 +2,8 @@ name: Code Review
 
 on:
   pull_request:
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      pr_number:
-        description: 'PR number to review (optional, for manual runs)'
-        required: false
-        type: string
 
 permissions:
   contents: read
