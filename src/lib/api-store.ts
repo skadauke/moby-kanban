@@ -113,7 +113,7 @@ export async function createTask(data: {
         title: data.title,
         description: data.description || null,
         status: "BACKLOG",
-        priority: data.priority || "MEDIUM",
+        priority: data.priority || null,
         creator: data.creator || "MOBY",
         needs_review: false,
         position: maxPos + 1,

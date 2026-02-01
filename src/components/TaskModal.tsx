@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -66,7 +66,7 @@ export function TaskModal({
     if (task) {
       setTitle(task.title);
       setDescription(task.description || "");
-      setPriority(task.priority);
+      setPriority(task.priority || "");
       setCreator(task.creator);
       setProjectId(task.projectId);
     } else {
@@ -79,28 +79,25 @@ export function TaskModal({
     setError(null);
   }, [task, open, defaultCreator, defaultProjectId]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) return;
+  const doSubmit = useCallback(async () => {
+    if (!title.trim() || isSubmitting) return;
 
     setIsSubmitting(true);
     setError(null);
 
     try {
       if (isEditing && task) {
-        // For editing, we pass the updated task back
         const updated: Task = {
           ...task,
           title,
           description: description || null,
-          priority: priority || task.priority,
+          priority: priority || null,
           creator,
           projectId,
           updatedAt: new Date(),
         };
         onTaskUpdated(updated);
       } else {
-        // For creating, call the API
         const created = await createTask({
           title,
           description: description || undefined,
@@ -118,6 +115,26 @@ export function TaskModal({
     } finally {
       setIsSubmitting(false);
     }
+  }, [title, description, priority, creator, projectId, isEditing, task, isSubmitting, onTaskUpdated, onTaskCreated, onClose]);
+
+  // Keyboard shortcut: Cmd/Ctrl+Enter to submit
+  useEffect(() => {
+    if (!open) return;
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        e.preventDefault();
+        doSubmit();
+      }
+    };
+    
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open, doSubmit]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    doSubmit();
   };
 
   return (
