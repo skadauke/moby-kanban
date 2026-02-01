@@ -43,7 +43,7 @@ export async function updateTask(
     title: string;
     description: string | null;
     status: Status;
-    priority: Priority;
+    priority: Priority | null;
     creator: Creator;
     needsReview: boolean;
     position: number;

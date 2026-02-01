@@ -54,6 +54,8 @@ export function TaskCard({ task, onEdit, onDelete, onToggleFlag }: TaskCardProps
     onEdit(task);
   };
 
+  const isDone = task.status === "DONE";
+
   return (
     <Card
       ref={setNodeRef}
@@ -61,15 +63,15 @@ export function TaskCard({ task, onEdit, onDelete, onToggleFlag }: TaskCardProps
       {...attributes}
       {...listeners}
       onClick={handleCardClick}
-      className={`cursor-grab active:cursor-grabbing bg-zinc-900 border-zinc-800 hover:border-zinc-700 transition-all hover:scale-[1.02] ${
-        task.needsReview ? "ring-2 ring-amber-500/50" : ""
-      }`}
+      className={`cursor-grab active:cursor-grabbing border-zinc-800 hover:border-zinc-700 transition-all hover:scale-[1.02] ${
+        isDone ? "bg-zinc-950 opacity-60" : "bg-zinc-900"
+      } ${task.needsReview ? "ring-2 ring-amber-500/50" : ""}`}
     >
       <CardContent className="p-2.5">
         {/* Top row: avatar, flag, menu */}
         <div className="flex items-center justify-between mb-1.5">
           <div className="flex items-center gap-1.5">
-            <span className="text-sm">{creator?.emoji}</span>
+            <span className={`text-sm ${isDone ? "opacity-50" : ""}`}>{creator?.emoji}</span>
             {task.needsReview && (
               <Flag className="h-3 w-3 text-amber-500 fill-amber-500" />
             )}
@@ -106,7 +108,9 @@ export function TaskCard({ task, onEdit, onDelete, onToggleFlag }: TaskCardProps
         </div>
 
         {/* Title */}
-        <h3 className="font-medium text-sm leading-snug mb-1">{task.title}</h3>
+        <h3 className={`font-medium text-sm leading-snug mb-1 ${isDone ? "line-through text-zinc-500" : ""}`}>
+          {task.title}
+        </h3>
         
         {/* Details (if any) */}
         {task.description && (
@@ -115,13 +119,15 @@ export function TaskCard({ task, onEdit, onDelete, onToggleFlag }: TaskCardProps
           </p>
         )}
         
-        {/* Priority badge */}
-        <Badge
-          variant="secondary"
-          className={`${priority?.color} text-white text-[10px] px-1.5 py-0 h-4`}
-        >
-          {priority?.label}
-        </Badge>
+        {/* Priority badge - only show if priority is set */}
+        {priority && (
+          <Badge
+            variant="secondary"
+            className={`${priority.color} ${isDone ? "opacity-50" : ""} text-white text-[10px] px-1.5 py-0 h-4`}
+          >
+            {priority.label}
+          </Badge>
+        )}
       </CardContent>
     </Card>
   );
