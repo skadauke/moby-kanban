@@ -1,4 +1,4 @@
-name: AI Review
+name: Code Review
 
 on:
   pull_request:
@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   review:
-    name: AI Review
+    name: Code Review
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -28,7 +28,7 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Run AI Review
+      - name: Run Code Review
         id: review
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -45,7 +45,7 @@ jobs:
           else
             echo "Review failed or produced no output"
             cat review_log.txt >&2
-            echo "## ⚠️ AI Review Failed" > review_output.md
+            echo "## ⚠️ Code Review Failed" > review_output.md
             echo "" >> review_output.md
             echo "The AI review could not be completed. Check the workflow logs for details." >> review_output.md
           fi
@@ -102,6 +102,6 @@ ${review}
       - name: Output review for manual runs
         if: github.event_name == 'workflow_dispatch'
         run: |
-          echo "## AI Review Output"
+          echo "## Code Review Output"
           echo ""
           cat review_output.md
