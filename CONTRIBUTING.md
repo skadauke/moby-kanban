@@ -50,6 +50,21 @@ chore: maintenance tasks
 - Prettier for formatting
 - Tests for new functionality
 
+### Checking for Dead Code
+
+Before major PRs, check for unused dependencies:
+
+```bash
+npx depcheck
+```
+
+Note: This may report false positives (e.g., Tailwind, dotenv, semantic-release). Use judgment — if a dependency isn't imported anywhere in `src/`, it's probably safe to remove.
+
+Also review for:
+- Unused files (check imports)
+- Stale documentation (e.g., outdated tech stack references)
+- Commented-out code blocks
+
 ### Project-Specific Notes
 
 <!-- Add project-specific contribution notes here -->
