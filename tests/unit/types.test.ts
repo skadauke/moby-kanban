@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { COLUMNS, PRIORITIES, CREATORS, Status, Priority, Creator } from '@/lib/types';
+import { COLUMNS, PRIORITIES, CREATORS } from '@/lib/types';
 
 describe('Types', () => {
   describe('COLUMNS', () => {

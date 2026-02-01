@@ -36,7 +36,7 @@ export default function Home() {
 
   const filteredTasks = useMemo(() => {
     // First filter by project
-    let result = selectedProjectId
+    const result = selectedProjectId
       ? tasks.filter((t) => t.projectId === selectedProjectId)
       : tasks;
     

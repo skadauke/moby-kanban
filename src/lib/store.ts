@@ -1,4 +1,4 @@
-import { Task, Status, Priority, Creator } from "./types";
+import { Task, Priority, Creator } from "./types";
 
 // Client-side storage for demo (Vercel doesn't support SQLite)
 const STORAGE_KEY = "moby-kanban-tasks";

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,10 +25,12 @@ export function UserMenu({ user }: UserMenuProps) {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="rounded-full">
           {user.image ? (
-            <img
+            <Image
               src={user.image}
               alt={user.name || "User"}
-              className="w-8 h-8 rounded-full"
+              width={32}
+              height={32}
+              className="rounded-full"
             />
           ) : (
             <User className="h-5 w-5" />

@@ -50,7 +50,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    async signIn({ user, account, profile }) {
+    async signIn({ account, profile }) {
       // Get GitHub username from profile
       const githubUsername = (profile as { login?: string })?.login?.toLowerCase();
       const githubId = account?.providerAccountId || null;
