@@ -17,22 +17,26 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const start = Date.now();
   
-  try {
-    const project = await getProjectById(id);
-    if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
-    }
-    return NextResponse.json(project);
-  } catch (error) {
-    await logger.error("Failed to get project", {
-      path: `/api/projects/${id}`,
-      method: "GET",
-      statusCode: 500,
-      duration: Date.now() - start,
-      context: { error: String(error) },
-    });
-    return NextResponse.json({ error: "Failed to get project" }, { status: 500 });
+  if (!id || typeof id !== "string") {
+    return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
   }
+
+  const result = await getProjectById(id);
+  
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: result.error.message },
+      { status: result.error.httpStatus }
+    );
+  }
+
+  await logger.info("Project fetched", {
+    path: `/api/projects/${id}`,
+    method: "GET",
+    statusCode: 200,
+    duration: Date.now() - start,
+  });
+  return NextResponse.json(result.data);
 }
 
 // PATCH /api/projects/[id]
@@ -40,41 +44,49 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const start = Date.now();
   
+  if (!id || typeof id !== "string") {
+    return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
+  }
+
+  let body;
   try {
-    const body = await request.json();
-    const result = updateProjectSchema.safeParse(body);
-    
-    if (!result.success) {
-      return NextResponse.json(
-        { error: result.error.issues.map(i => i.message).join(", ") },
-        { status: 400 }
-      );
-    }
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
 
-    const project = await updateProject(id, result.data);
-    if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
-    }
+  const validation = updateProjectSchema.safeParse(body);
+  if (!validation.success) {
+    return NextResponse.json(
+      { error: validation.error.issues.map(i => i.message).join(", ") },
+      { status: 400 }
+    );
+  }
 
-    await logger.info("Project updated", {
-      path: `/api/projects/${id}`,
-      method: "PATCH",
-      statusCode: 200,
-      duration: Date.now() - start,
-      context: { projectId: id },
-    });
-    return NextResponse.json(project);
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+  const result = await updateProject(id, validation.data);
+  
+  if (!result.ok) {
     await logger.error("Failed to update project", {
       path: `/api/projects/${id}`,
       method: "PATCH",
-      statusCode: 500,
+      statusCode: result.error.httpStatus,
       duration: Date.now() - start,
-      context: { error: errorMessage },
+      context: { error: result.error.message, code: result.error.code },
     });
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return NextResponse.json(
+      { error: result.error.message },
+      { status: result.error.httpStatus }
+    );
   }
+
+  await logger.info("Project updated", {
+    path: `/api/projects/${id}`,
+    method: "PATCH",
+    statusCode: 200,
+    duration: Date.now() - start,
+    context: { projectId: id },
+  });
+  return NextResponse.json(result.data);
 }
 
 // DELETE /api/projects/[id]
@@ -82,28 +94,32 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const start = Date.now();
   
-  try {
-    const success = await deleteProject(id);
-    if (!success) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
-    }
+  if (!id || typeof id !== "string") {
+    return NextResponse.json({ error: "Invalid project ID" }, { status: 400 });
+  }
 
-    await logger.info("Project deleted", {
-      path: `/api/projects/${id}`,
-      method: "DELETE",
-      statusCode: 204,
-      duration: Date.now() - start,
-      context: { projectId: id },
-    });
-    return new NextResponse(null, { status: 204 });
-  } catch (error) {
+  const result = await deleteProject(id);
+  
+  if (!result.ok) {
     await logger.error("Failed to delete project", {
       path: `/api/projects/${id}`,
       method: "DELETE",
-      statusCode: 500,
+      statusCode: result.error.httpStatus,
       duration: Date.now() - start,
-      context: { error: String(error) },
+      context: { error: result.error.message, code: result.error.code },
     });
-    return NextResponse.json({ error: "Failed to delete project" }, { status: 500 });
+    return NextResponse.json(
+      { error: result.error.message },
+      { status: result.error.httpStatus }
+    );
   }
+
+  await logger.info("Project deleted", {
+    path: `/api/projects/${id}`,
+    method: "DELETE",
+    statusCode: 204,
+    duration: Date.now() - start,
+    context: { projectId: id },
+  });
+  return new NextResponse(null, { status: 204 });
 }

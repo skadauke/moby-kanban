@@ -8,32 +8,32 @@ const reorderSchema = z.object({
 
 // POST /api/projects/reorder - Reorder projects
 export async function POST(request: NextRequest) {
+  let body;
   try {
-    const body = await request.json();
-    
-    const result = reorderSchema.safeParse(body);
-    if (!result.success) {
-      return NextResponse.json(
-        { error: result.error.issues.map(i => i.message).join(", ") },
-        { status: 400 }
-      );
-    }
-
-    const success = await reorderProjects(result.data.projectIds);
-    
-    if (!success) {
-      return NextResponse.json(
-        { error: "Failed to reorder projects" },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("POST /api/projects/reorder error:", error);
+    body = await request.json();
+  } catch {
     return NextResponse.json(
-      { error: "Failed to reorder projects" },
-      { status: 500 }
+      { error: "Invalid JSON body" },
+      { status: 400 }
     );
   }
+  
+  const validation = reorderSchema.safeParse(body);
+  if (!validation.success) {
+    return NextResponse.json(
+      { error: validation.error.issues.map(i => i.message).join(", ") },
+      { status: 400 }
+    );
+  }
+
+  const result = await reorderProjects(validation.data.projectIds);
+  
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: result.error.message },
+      { status: result.error.httpStatus }
+    );
+  }
+
+  return NextResponse.json({ success: true });
 }

@@ -1,5 +1,6 @@
 import { Project } from "./types";
 import { createAdminClient } from "./supabase/server";
+import { Result, ok, err, DbError } from "./result";
 
 // Database row type
 interface ProjectRow {
@@ -24,7 +25,7 @@ function rowToProject(row: ProjectRow): Project {
   };
 }
 
-export async function getAllProjects(): Promise<Project[]> {
+export async function getAllProjects(): Promise<Result<Project[], DbError>> {
   try {
     const supabase = createAdminClient();
     const { data, error } = await supabase
@@ -34,17 +35,17 @@ export async function getAllProjects(): Promise<Project[]> {
 
     if (error) {
       console.error("Failed to get projects:", error);
-      return [];
+      return err(new DbError(error.message, "CONNECTION"));
     }
 
-    return (data || []).map((row: ProjectRow) => rowToProject(row));
+    return ok((data || []).map((row: ProjectRow) => rowToProject(row)));
   } catch (error) {
     console.error("Failed to get projects:", error);
-    return [];
+    return err(new DbError(String(error), "UNKNOWN"));
   }
 }
 
-export async function getProjectById(id: string): Promise<Project | null> {
+export async function getProjectById(id: string): Promise<Result<Project, DbError>> {
   try {
     const supabase = createAdminClient();
     const { data, error } = await supabase
@@ -53,12 +54,22 @@ export async function getProjectById(id: string): Promise<Project | null> {
       .eq("id", id)
       .single();
 
-    if (error || !data) return null;
+    if (error) {
+      if (error.code === "PGRST116") {
+        return err(new DbError("Project not found", "NOT_FOUND"));
+      }
+      console.error("Failed to get project:", error);
+      return err(new DbError(error.message, "CONNECTION"));
+    }
 
-    return rowToProject(data as ProjectRow);
+    if (!data) {
+      return err(new DbError("Project not found", "NOT_FOUND"));
+    }
+
+    return ok(rowToProject(data as ProjectRow));
   } catch (error) {
     console.error("Failed to get project:", error);
-    return null;
+    return err(new DbError(String(error), "UNKNOWN"));
   }
 }
 
@@ -66,39 +77,49 @@ export async function createProject(data: {
   name: string;
   description?: string;
   color?: string;
-}): Promise<Project> {
-  const supabase = createAdminClient();
+}): Promise<Result<Project, DbError>> {
+  try {
+    const supabase = createAdminClient();
 
-  // Get max position
-  const { data: maxPosData } = await supabase
-    .from("projects")
-    .select("position")
-    .order("position", { ascending: false })
-    .limit(1);
+    // Get max position
+    const { data: maxPosData, error: posError } = await supabase
+      .from("projects")
+      .select("position")
+      .order("position", { ascending: false })
+      .limit(1);
 
-  const maxPos = maxPosData?.[0]?.position ?? -1;
+    if (posError) {
+      console.error("Failed to get max position:", posError);
+      return err(new DbError(posError.message, "CONNECTION"));
+    }
 
-  const { data: newProject, error } = await supabase
-    .from("projects")
-    .insert({
-      name: data.name,
-      description: data.description || null,
-      color: data.color || "#3b82f6",
-      position: maxPos + 1,
-    })
-    .select()
-    .single();
+    const maxPos = maxPosData?.[0]?.position ?? -1;
 
-  if (error) {
-    const errMsg = error.message || "Unknown database error";
-    const errCode = error.code || "UNKNOWN";
-    throw new Error(`Database error (${errCode}): ${errMsg}`);
+    const { data: newProject, error } = await supabase
+      .from("projects")
+      .insert({
+        name: data.name,
+        description: data.description || null,
+        color: data.color || "#3b82f6",
+        position: maxPos + 1,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Failed to create project:", error);
+      return err(new DbError(error.message, "CONNECTION"));
+    }
+
+    if (!newProject) {
+      return err(new DbError("Project created but no data returned", "UNKNOWN"));
+    }
+
+    return ok(rowToProject(newProject as ProjectRow));
+  } catch (error) {
+    console.error("Failed to create project:", error);
+    return err(new DbError(String(error), "UNKNOWN"));
   }
-  if (!newProject) {
-    throw new Error("Project created but no data returned");
-  }
-
-  return rowToProject(newProject as ProjectRow);
 }
 
 export async function updateProject(
@@ -109,7 +130,7 @@ export async function updateProject(
     color: string;
     position: number;
   }>
-): Promise<Project | null> {
+): Promise<Result<Project, DbError>> {
   try {
     const supabase = createAdminClient();
 
@@ -119,7 +140,9 @@ export async function updateProject(
     if (data.color !== undefined) updates.color = data.color;
     if (data.position !== undefined) updates.position = data.position;
 
-    if (Object.keys(updates).length === 0) return getProjectById(id);
+    if (Object.keys(updates).length === 0) {
+      return getProjectById(id);
+    }
 
     updates.updated_at = new Date().toISOString();
 
@@ -130,57 +153,92 @@ export async function updateProject(
       .select()
       .single();
 
-    if (error || !updated) return null;
+    if (error) {
+      if (error.code === "PGRST116") {
+        return err(new DbError("Project not found", "NOT_FOUND"));
+      }
+      console.error("Failed to update project:", error);
+      return err(new DbError(error.message, "CONNECTION"));
+    }
 
-    return rowToProject(updated as ProjectRow);
+    if (!updated) {
+      return err(new DbError("Project not found", "NOT_FOUND"));
+    }
+
+    return ok(rowToProject(updated as ProjectRow));
   } catch (error) {
     console.error("Failed to update project:", error);
-    return null;
+    return err(new DbError(String(error), "UNKNOWN"));
   }
 }
 
-export async function deleteProject(id: string): Promise<boolean> {
+export async function deleteProject(id: string): Promise<Result<void, DbError>> {
   try {
     const supabase = createAdminClient();
-    // First, unset projectId for all tasks in this project
-    await supabase
+    
+    // First check if project exists
+    const { data: existing } = await supabase
+      .from("projects")
+      .select("id")
+      .eq("id", id)
+      .single();
+    
+    if (!existing) {
+      return err(new DbError("Project not found", "NOT_FOUND"));
+    }
+
+    // Unset projectId for all tasks in this project
+    // IMPORTANT: Check this succeeds before deleting!
+    const { error: taskError } = await supabase
       .from("tasks")
-      .update({ project_id: null })
+      .update({ project_id: null, updated_at: new Date().toISOString() })
       .eq("project_id", id);
     
-    // Then delete the project
+    if (taskError) {
+      console.error("Failed to unassign tasks from project:", taskError);
+      return err(new DbError("Failed to unassign tasks: " + taskError.message, "CONNECTION"));
+    }
+
+    // Now delete the project
     const { error } = await supabase.from("projects").delete().eq("id", id);
-    return !error;
+    
+    if (error) {
+      console.error("Failed to delete project:", error);
+      return err(new DbError(error.message, "CONNECTION"));
+    }
+
+    return ok(undefined);
   } catch (error) {
     console.error("Failed to delete project:", error);
-    return false;
+    return err(new DbError(String(error), "UNKNOWN"));
   }
 }
 
-export async function reorderProjects(projectIds: string[]): Promise<boolean> {
+export async function reorderProjects(projectIds: string[]): Promise<Result<void, DbError>> {
   try {
     const supabase = createAdminClient();
+    const now = new Date().toISOString();
     
-    // Update each project's position based on array order
-    const updates = projectIds.map((id, position) => 
-      supabase
-        .from("projects")
-        .update({ position, updated_at: new Date().toISOString() })
-        .eq("id", id)
-    );
-    
-    const results = await Promise.all(updates);
-    
-    // Check if any update failed
-    const hasErrors = results.some(r => r.error);
-    if (hasErrors) {
-      console.error("Some project reorder updates failed:", results.filter(r => r.error));
-      return false;
+    // Build bulk update data
+    const updates = projectIds.map((id, position) => ({
+      id,
+      position,
+      updated_at: now,
+    }));
+
+    // Use upsert for atomic-ish operation (still not truly atomic, but better)
+    const { error } = await supabase
+      .from("projects")
+      .upsert(updates, { onConflict: "id", ignoreDuplicates: false });
+
+    if (error) {
+      console.error("Failed to reorder projects:", error);
+      return err(new DbError(error.message, "CONNECTION"));
     }
-    
-    return true;
+
+    return ok(undefined);
   } catch (error) {
     console.error("Failed to reorder projects:", error);
-    return false;
+    return err(new DbError(String(error), "UNKNOWN"));
   }
 }

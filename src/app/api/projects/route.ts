@@ -12,66 +12,77 @@ const createProjectSchema = z.object({
 // GET /api/projects - List all projects
 export async function GET() {
   const start = Date.now();
-  try {
-    const projects = await getAllProjects();
-    await logger.info("Projects fetched", {
-      path: "/api/projects",
-      method: "GET",
-      statusCode: 200,
-      duration: Date.now() - start,
-      context: { count: projects.length },
-    });
-    return NextResponse.json(projects);
-  } catch (error) {
+  
+  const result = await getAllProjects();
+  
+  if (!result.ok) {
     await logger.error("Failed to fetch projects", {
       path: "/api/projects",
       method: "GET",
-      statusCode: 500,
+      statusCode: result.error.httpStatus,
       duration: Date.now() - start,
-      context: { error: String(error) },
+      context: { error: result.error.message, code: result.error.code },
     });
     return NextResponse.json(
-      { error: "Failed to fetch projects" },
-      { status: 500 }
+      { error: result.error.message },
+      { status: result.error.httpStatus }
     );
   }
+
+  await logger.info("Projects fetched", {
+    path: "/api/projects",
+    method: "GET",
+    statusCode: 200,
+    duration: Date.now() - start,
+    context: { count: result.data.length },
+  });
+  return NextResponse.json(result.data);
 }
 
 // POST /api/projects - Create new project
 export async function POST(request: NextRequest) {
   const start = Date.now();
+  
+  let body;
   try {
-    const body = await request.json();
-    
-    const result = createProjectSchema.safeParse(body);
-    if (!result.success) {
-      return NextResponse.json(
-        { error: result.error.issues.map(i => i.message).join(", ") },
-        { status: 400 }
-      );
-    }
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid JSON body" },
+      { status: 400 }
+    );
+  }
+  
+  const validation = createProjectSchema.safeParse(body);
+  if (!validation.success) {
+    return NextResponse.json(
+      { error: validation.error.issues.map(i => i.message).join(", ") },
+      { status: 400 }
+    );
+  }
 
-    const project = await createProject(result.data);
-    await logger.info("Project created", {
-      path: "/api/projects",
-      method: "POST",
-      statusCode: 201,
-      duration: Date.now() - start,
-      context: { projectId: project.id, name: project.name },
-    });
-    return NextResponse.json(project, { status: 201 });
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+  const result = await createProject(validation.data);
+  
+  if (!result.ok) {
     await logger.error("Failed to create project", {
       path: "/api/projects",
       method: "POST",
-      statusCode: 500,
+      statusCode: result.error.httpStatus,
       duration: Date.now() - start,
-      context: { error: errorMessage },
+      context: { error: result.error.message, code: result.error.code },
     });
     return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
+      { error: result.error.message },
+      { status: result.error.httpStatus }
     );
   }
+
+  await logger.info("Project created", {
+    path: "/api/projects",
+    method: "POST",
+    statusCode: 201,
+    duration: Date.now() - start,
+    context: { projectId: result.data.id, name: result.data.name },
+  });
+  return NextResponse.json(result.data, { status: 201 });
 }
