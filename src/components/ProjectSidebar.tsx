@@ -1,7 +1,22 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useDroppable } from "@dnd-kit/core";
+import {
+  DndContext,
+  DragEndEvent,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Project } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +27,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Folder, ChevronLeft, ChevronRight, Trash2, Edit2, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Folder, ChevronLeft, ChevronRight, Trash2, Edit2, GripVertical } from "lucide-react";
 import { useKanbanDnd } from "./KanbanDndContext";
 
 interface ProjectSidebarProps {
@@ -25,42 +40,72 @@ const PROJECT_COLORS = [
   "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16",
 ];
 
-// Droppable project item
-function DroppableProjectItem({
+// Sortable + Droppable project item (draggable for reorder, droppable for tasks)
+function SortableProjectItem({
   project,
   isSelected,
   onSelect,
   onEdit,
   onDelete,
-  onMoveUp,
-  onMoveDown,
-  isFirst,
-  isLast,
+  isDraggingTask,
 }: {
   project: Project;
   isSelected: boolean;
   onSelect: () => void;
   onEdit: () => void;
   onDelete: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-  isFirst: boolean;
-  isLast: boolean;
+  isDraggingTask: boolean;
 }) {
-  const { isDraggingTask } = useKanbanDnd();
-  const { setNodeRef, isOver } = useDroppable({
+  // Sortable for project reordering
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setSortableRef,
+    transform,
+    transition,
+    isDragging: isProjectDragging,
+  } = useSortable({ 
+    id: project.id,
+    disabled: isDraggingTask, // Disable sorting when dragging a task
+  });
+
+  // Droppable for task drops
+  const { setNodeRef: setDroppableRef, isOver } = useDroppable({
     id: `project-drop-${project.id}`,
   });
+
+  // Combine refs
+  const setNodeRef = (node: HTMLElement | null) => {
+    setSortableRef(node);
+    setDroppableRef(node);
+  };
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isProjectDragging ? 0.5 : 1,
+  };
 
   return (
     <div
       ref={setNodeRef}
+      style={style}
       className={`group flex items-center gap-1 px-2 py-2 rounded-md transition-all ${
         isSelected
           ? "bg-zinc-800 text-zinc-100"
           : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
       } ${isOver && isDraggingTask ? "ring-2 ring-blue-500 bg-blue-500/10" : ""}`}
     >
+      {/* Drag handle - only show when not dragging a task */}
+      {!isDraggingTask && (
+        <button
+          {...attributes}
+          {...listeners}
+          className="p-1 cursor-grab active:cursor-grabbing text-zinc-600 hover:text-zinc-400 touch-none"
+        >
+          <GripVertical className="h-3 w-3" />
+        </button>
+      )}
       <button
         onClick={onSelect}
         className="flex-1 flex items-center gap-3 text-left min-w-0"
@@ -77,24 +122,6 @@ function DroppableProjectItem({
         </div>
       </button>
       <div className="hidden group-hover:flex items-center gap-0.5 flex-shrink-0">
-        {!isFirst && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
-            className="p-1 text-zinc-500 hover:text-zinc-300"
-            title="Move up"
-          >
-            <ChevronUp className="h-3 w-3" />
-          </button>
-        )}
-        {!isLast && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
-            className="p-1 text-zinc-500 hover:text-zinc-300"
-            title="Move down"
-          >
-            <ChevronDown className="h-3 w-3" />
-          </button>
-        )}
         <button
           onClick={(e) => { e.stopPropagation(); onEdit(); }}
           className="p-1 text-zinc-500 hover:text-zinc-300"
@@ -149,6 +176,13 @@ export function ProjectSidebar({ selectedProjectId, onSelectProject }: ProjectSi
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { isDraggingTask } = useKanbanDnd();
 
+  // Sensors for project reordering
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 },
+    })
+  );
+
   useEffect(() => {
     async function loadProjects() {
       try {
@@ -173,27 +207,25 @@ export function ProjectSidebar({ selectedProjectId, onSelectProject }: ProjectSi
     loadProjects();
   }, []);
 
-  const handleMoveProject = async (projectId: string, direction: "up" | "down") => {
-    const index = projects.findIndex(p => p.id === projectId);
-    if (index === -1) return;
-    
-    const newIndex = direction === "up" ? index - 1 : index + 1;
-    if (newIndex < 0 || newIndex >= projects.length) return;
+  // Handle project reorder via drag
+  const handleProjectDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
 
-    // Swap positions
-    const newProjects = [...projects];
-    [newProjects[index], newProjects[newIndex]] = [newProjects[newIndex], newProjects[index]];
-    
-    // Update positions
-    const reordered = newProjects.map((p, i) => ({ ...p, position: i }));
-    setProjects(reordered);
+    const oldIndex = projects.findIndex(p => p.id === active.id);
+    const newIndex = projects.findIndex(p => p.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
 
-    // Persist
+    const reordered = arrayMove(projects, oldIndex, newIndex);
+    const updated = reordered.map((p, i) => ({ ...p, position: i }));
+    setProjects(updated);
+
+    // Persist to API
     try {
       await fetch("/api/projects/reorder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectIds: reordered.map(p => p.id) }),
+        body: JSON.stringify({ projectIds: updated.map(p => p.id) }),
       });
     } catch (err) {
       console.error("Failed to reorder projects:", err);
@@ -370,22 +402,30 @@ export function ProjectSidebar({ selectedProjectId, onSelectProject }: ProjectSi
           {isLoading ? (
             <div className="px-3 py-4 text-sm text-zinc-500">Loading...</div>
           ) : (
-            <div className="mt-2 space-y-1">
-              {projects.map((project, index) => (
-                <DroppableProjectItem
-                  key={project.id}
-                  project={project}
-                  isSelected={selectedProjectId === project.id}
-                  onSelect={() => onSelectProject(project.id)}
-                  onEdit={() => openEditModal(project)}
-                  onDelete={() => handleDelete(project.id)}
-                  onMoveUp={() => handleMoveProject(project.id, "up")}
-                  onMoveDown={() => handleMoveProject(project.id, "down")}
-                  isFirst={index === 0}
-                  isLast={index === projects.length - 1}
-                />
-              ))}
-            </div>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleProjectDragEnd}
+            >
+              <SortableContext
+                items={projects.map(p => p.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="mt-2 space-y-1">
+                  {projects.map((project) => (
+                    <SortableProjectItem
+                      key={project.id}
+                      project={project}
+                      isSelected={selectedProjectId === project.id}
+                      onSelect={() => onSelectProject(project.id)}
+                      onEdit={() => openEditModal(project)}
+                      onDelete={() => handleDelete(project.id)}
+                      isDraggingTask={isDraggingTask}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
           )}
         </div>
       </div>
