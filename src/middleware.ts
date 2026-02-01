@@ -1,23 +1,40 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
+// API key for programmatic access (e.g., Moby bot)
+const API_KEY = process.env.API_KEY;
+
 export default auth((req) => {
   const isLoggedIn = !!req.auth;
   const isLoginPage = req.nextUrl.pathname === "/login";
   const isAuthApi = req.nextUrl.pathname.startsWith("/api/auth");
-  // Allow public API access for programmatic management
-  const isPublicApi = 
-    (req.nextUrl.pathname === "/api/tasks" && req.method === "GET") ||
-    req.nextUrl.pathname.startsWith("/api/projects");
+  const isApiRoute = req.nextUrl.pathname.startsWith("/api/");
 
-  // Allow auth API routes
+  // Allow auth API routes (NextAuth needs these)
   if (isAuthApi) {
     return NextResponse.next();
   }
 
-  // Allow public read access to tasks API (for Moby to read)
-  if (isPublicApi) {
-    return NextResponse.next();
+  // Check for API key authentication on API routes
+  if (isApiRoute) {
+    const authHeader = req.headers.get("authorization");
+    const apiKey = authHeader?.replace("Bearer ", "");
+    
+    // Allow if valid API key provided
+    if (API_KEY && apiKey === API_KEY) {
+      return NextResponse.next();
+    }
+    
+    // Allow if user is logged in via session
+    if (isLoggedIn) {
+      return NextResponse.next();
+    }
+    
+    // Reject unauthenticated API requests
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401 }
+    );
   }
 
   // Redirect unauthenticated users to login (except login page)
