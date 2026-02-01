@@ -13,8 +13,7 @@ import { join, relative } from 'path';
 
 // Configuration
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-// Use gpt-4o by default - Codex models require different API endpoint
-const MODEL = process.env.AI_REVIEW_MODEL || 'gpt-4o';
+const MODEL = process.env.AI_REVIEW_MODEL || 'gpt-5.2';
 const MAX_FILE_SIZE = 50000; // Skip files larger than 50KB
 const MAX_TOTAL_CHARS = 100000; // Limit total context
 
