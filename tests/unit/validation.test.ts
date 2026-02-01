@@ -18,6 +18,11 @@ describe('Validation', () => {
       expect(result.success).toBe(false);
     });
 
+    it('should reject whitespace-only title', () => {
+      const result = createTaskSchema.safeParse({ title: '   ' });
+      expect(result.success).toBe(false);
+    });
+
     it('should reject title over 200 chars', () => {
       const result = createTaskSchema.safeParse({ title: 'a'.repeat(201) });
       expect(result.success).toBe(false);

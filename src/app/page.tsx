@@ -85,9 +85,13 @@ export default function Home() {
   };
 
   const handleTasksChange = async (updatedTasks: Task[]) => {
-    // Optimistically update UI
+    // Merge updated tasks into full list (don't replace - handles filtered views)
     const oldTasks = previousTasksRef.current;
-    setTasks(updatedTasks);
+    const updatedMap = new Map(updatedTasks.map((t) => [t.id, t]));
+    const mergedTasks = oldTasks.map(t => updatedMap.get(t.id) ?? t);
+    
+    // Optimistically update UI with merged list
+    setTasks(mergedTasks);
     
     // Find what changed and sync with API
     const oldTaskMap = new Map(oldTasks.map((t) => [t.id, t]));
@@ -112,12 +116,13 @@ export default function Home() {
     }
     
     if (errors.length > 0) {
-      // Rollback on failure
+      // Rollback and resync on failure
       setTasks(oldTasks);
       showToast(`Failed to move: ${errors.join(", ")}`);
+      await loadTasks(true); // Resync to avoid partial-success divergence
     } else {
-      // Success - update ref
-      previousTasksRef.current = updatedTasks;
+      // Success - update ref with merged list
+      previousTasksRef.current = mergedTasks;
     }
   };
 

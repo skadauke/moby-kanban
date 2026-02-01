@@ -4,9 +4,8 @@ import { z } from "zod";
 export const createTaskSchema = z.object({
   title: z
     .string()
-    .min(1, "Title is required")
-    .max(200, "Title must be 200 characters or less")
-    .transform((s) => s.trim()),
+    .transform((s) => s.trim())
+    .pipe(z.string().min(1, "Title is required").max(200, "Title must be 200 characters or less")),
   description: z
     .string()
     .max(2000, "Description must be 2000 characters or less")
@@ -21,9 +20,8 @@ export const createTaskSchema = z.object({
 export const updateTaskSchema = z.object({
   title: z
     .string()
-    .min(1, "Title is required")
-    .max(200, "Title must be 200 characters or less")
     .transform((s) => s.trim())
+    .pipe(z.string().min(1, "Title is required").max(200, "Title must be 200 characters or less"))
     .optional(),
   description: z
     .string()

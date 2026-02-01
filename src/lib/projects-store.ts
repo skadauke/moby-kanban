@@ -169,7 +169,15 @@ export async function reorderProjects(projectIds: string[]): Promise<boolean> {
         .eq("id", id)
     );
     
-    await Promise.all(updates);
+    const results = await Promise.all(updates);
+    
+    // Check if any update failed
+    const hasErrors = results.some(r => r.error);
+    if (hasErrors) {
+      console.error("Some project reorder updates failed:", results.filter(r => r.error));
+      return false;
+    }
+    
     return true;
   } catch (error) {
     console.error("Failed to reorder projects:", error);
