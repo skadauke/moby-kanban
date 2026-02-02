@@ -309,7 +309,7 @@ export function ProjectSidebar({ selectedProjectId, onSelectProject }: ProjectSi
 
   if (isCollapsed) {
     return (
-      <div className="w-12 bg-zinc-950 border-r border-zinc-800 flex flex-col items-center py-4">
+      <div className="w-12 min-h-screen bg-zinc-950 border-r border-zinc-800 flex flex-col items-center py-4">
         <Button
           variant="ghost"
           size="icon"
@@ -350,7 +350,7 @@ export function ProjectSidebar({ selectedProjectId, onSelectProject }: ProjectSi
 
   return (
     <>
-      <div className={`w-64 bg-zinc-950 border-r border-zinc-800 flex flex-col transition-all ${
+      <div className={`w-64 min-h-screen bg-zinc-950 border-r border-zinc-800 flex flex-col transition-all ${
         isDraggingTask ? "ring-2 ring-inset ring-blue-500/30" : ""
       }`}>
         <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
