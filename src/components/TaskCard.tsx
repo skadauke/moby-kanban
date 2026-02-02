@@ -63,7 +63,7 @@ export function TaskCard({ task, onEdit, onDelete, onToggleFlag }: TaskCardProps
       {...attributes}
       {...listeners}
       onClick={handleCardClick}
-      className={`cursor-grab active:cursor-grabbing border-zinc-800 hover:border-zinc-700 transition-all hover:scale-[1.02] ${
+      className={`cursor-grab active:cursor-grabbing border-zinc-800 hover:border-zinc-700 transition-colors hover:bg-zinc-800 ${
         isDone ? "bg-zinc-950 opacity-60" : "bg-zinc-900"
       } ${task.needsReview ? "ring-2 ring-amber-500/50" : ""}`}
     >

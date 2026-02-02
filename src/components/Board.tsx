@@ -5,6 +5,7 @@ import { useDroppable } from "@dnd-kit/core";
 import { Task, Status, COLUMNS } from "@/lib/types";
 import { Column } from "./Column";
 import { TaskModal } from "./TaskModal";
+import { useKanbanDnd } from "./KanbanDndContext";
 
 interface BoardProps {
   initialTasks: Task[];
@@ -114,7 +115,11 @@ function DroppableColumn({
   onDeleteTask: (taskId: string) => void;
   onToggleFlag: (taskId: string) => void;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id });
+  const { setNodeRef } = useDroppable({ id });
+  const { activeDropColumn, isDraggingTask } = useKanbanDnd();
+  
+  // Show highlight when this column is the active drop target
+  const isOver = isDraggingTask && activeDropColumn === id;
 
   return (
     <div

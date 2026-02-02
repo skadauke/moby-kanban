@@ -21,11 +21,13 @@ import { TaskCard } from "./TaskCard";
 interface KanbanDndContextValue {
   activeTask: Task | null;
   isDraggingTask: boolean;
+  activeDropColumn: Status | null;
 }
 
 const KanbanDndStateContext = createContext<KanbanDndContextValue>({
   activeTask: null,
   isDraggingTask: false,
+  activeDropColumn: null,
 });
 
 export function useKanbanDnd() {
@@ -48,6 +50,7 @@ export function KanbanDndProvider({
   onTaskReorder,
 }: KanbanDndProviderProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const [activeDropColumn, setActiveDropColumn] = useState<Status | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -64,12 +67,36 @@ export function KanbanDndProvider({
   }, [tasks]);
 
   const handleDragOver = useCallback((event: DragOverEvent) => {
-    // Let the Board component handle drag-over for columns
-  }, []);
+    const { over } = event;
+    if (!over) {
+      setActiveDropColumn(null);
+      return;
+    }
+
+    const overId = over.id as string;
+
+    // Check if over a column directly
+    const overColumn = COLUMNS.find((c) => c.id === overId);
+    if (overColumn) {
+      setActiveDropColumn(overColumn.id);
+      return;
+    }
+
+    // Check if over a task - get its column
+    const overTask = tasks.find((t) => t.id === overId);
+    if (overTask) {
+      setActiveDropColumn(overTask.status);
+      return;
+    }
+
+    // Over something else (like project sidebar)
+    setActiveDropColumn(null);
+  }, [tasks]);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     setActiveTask(null);
+    setActiveDropColumn(null);
 
     if (!over) return;
 
@@ -168,7 +195,7 @@ export function KanbanDndProvider({
   }, [tasks]);
 
   return (
-    <KanbanDndStateContext.Provider value={{ activeTask, isDraggingTask: !!activeTask }}>
+    <KanbanDndStateContext.Provider value={{ activeTask, isDraggingTask: !!activeTask, activeDropColumn }}>
       <DndContext
         sensors={sensors}
         collisionDetection={customCollisionDetection}
