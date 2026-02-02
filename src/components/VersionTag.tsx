@@ -8,8 +8,8 @@ export function VersionTag() {
   const commitSha = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || "dev";
   const rawBuildTime = process.env.NEXT_PUBLIC_BUILD_TIME || new Date().toISOString();
   
-  // Format as "Feb 2, 2026 4:30 PM" for readability
-  const buildTime = new Date(rawBuildTime).toLocaleDateString("en-US", {
+  // Format as "Feb 2, 2026, 4:30 PM" for readability
+  const buildTime = new Date(rawBuildTime).toLocaleString("en-US", {
     month: "short",
     day: "numeric", 
     year: "numeric",
